@@ -1,1 +1,1024 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Français Battle 🗼</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
 
+<!-- ===== FIREBASE ===== -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, update, onValue, push, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ══════════════════════════════════════════════
+//  🔧 ใส่ค่า Firebase Config ของคุณที่นี่
+// ══════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey:            "AIzaSyAV2c1ZD8K1H_jsT8vaUcSi4Gp-w10aKSM",
+  authDomain:        "game-prot.firebaseapp.com",
+  databaseURL:       "https://game-prot-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "game-prot",
+  storageBucket:     "game-prot.firebasestorage.app",
+  messagingSenderId: "1059190564649",
+  appId:             "1:1059190564649:web:8458ae19e85a37b974f938"
+};
+// ══════════════════════════════════════════════
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ─── QUESTIONS ────────────────────────────────
+const QUESTIONS = [
+  { q:"Bonjour แปลว่าอะไร?",               opts:["สวัสดี","ขอบคุณ","ลาก่อน","โปรดทราบ"],  ans:0 },
+  { q:"Merci แปลว่าอะไร?",                 opts:["ขอโทษ","ขอบคุณ","ใช่","ไม่"],           ans:1 },
+  { q:"Comment vous appelez-vous? หมายความว่า?", opts:["คุณสบายดีไหม?","คุณชื่ออะไร?","คุณอายุเท่าไหร่?","คุณอยู่ที่ไหน?"], ans:1 },
+  { q:"ตัวเลข 'trois' คือเลขอะไร?",       opts:["2","3","4","5"],                          ans:1 },
+  { q:"Oui แปลว่าอะไร?",                   opts:["ไม่","บางที","ใช่","ไม่รู้"],            ans:2 },
+  { q:"Je m'appelle Marie แปลว่า?",        opts:["ฉันชื่อมารี","มารีสวย","ฉันรักมารี","มารีเป็นเพื่อน"], ans:0 },
+  { q:"'แมว' ภาษาฝรั่งเศสคือ?",           opts:["chien","chat","cheval","cochon"],         ans:1 },
+  { q:"Au revoir แปลว่าอะไร?",             opts:["สวัสดีตอนเช้า","ขอบคุณมาก","ลาก่อน","ยินดีพบคุณ"], ans:2 },
+  { q:"Quelle heure est-il? หมายถึง?",    opts:["อากาศเป็นยังไง?","กี่โมงแล้ว?","วันนี้วันอะไร?","ราคาเท่าไหร่?"], ans:1 },
+  { q:"ตัวเลข 'cinq' คือเลขอะไร?",        opts:["4","5","6","7"],                          ans:1 },
+  { q:"Je suis étudiant แปลว่า?",          opts:["ฉันเป็นครู","ฉันเป็นนักเรียน","ฉันเป็นหมอ","ฉันเป็นนักร้อง"], ans:1 },
+  { q:"Paris อยู่ในประเทศอะไร?",           opts:["อิตาลี","สเปน","ฝรั่งเศส","เบลเยียม"],  ans:2 },
+  { q:"Bonne nuit แปลว่าอะไร?",            opts:["อรุณสวัสดิ์","ราตรีสวัสดิ์","ยินดีต้อนรับ","ขอบคุณ"], ans:1 },
+  { q:"J'aime le chocolat แปลว่า?",        opts:["ฉันไม่ชอบช็อก","ช็อกอร่อย","ฉันชอบช็อก","ฉันกินช็อก"], ans:2 },
+  { q:"'หนังสือ' ภาษาฝรั่งเศสคือ?",       opts:["livre","stylo","cahier","table"],         ans:0 },
+  { q:"S'il vous plaît แปลว่า?",           opts:["ขอโทษ","ขอบคุณ","กรุณา/โปรด","ยินดี"],  ans:2 },
+  { q:"La Tour Eiffel อยู่ที่เมืองอะไร?", opts:["Lyon","Marseille","Nice","Paris"],        ans:3 },
+  { q:"ตัวเลข 'dix' คือเลขอะไร?",         opts:["8","9","10","11"],                        ans:2 },
+  { q:"Comment allez-vous? หมายความว่า?", opts:["คุณอยู่ที่ไหน?","คุณสบายดีไหม?","คุณชื่ออะไร?","คุณทำอะไรอยู่?"], ans:1 },
+  { q:"'น้ำ' ภาษาฝรั่งเศสคือ?",           opts:["lait","jus","eau","vin"],                 ans:2 },
+];
+
+const SKILL_CARDS = [
+  { id:"attack",  icon:"⚔️",  name:"โจมตี",      desc:"ลด HP ศัตรู 2",    cost:2, type:"attack",  dmg:2 },
+  { id:"attack2", icon:"🗡️",  name:"โจมตีหนัก",  desc:"ลด HP ศัตรู 3",    cost:3, type:"attack",  dmg:3 },
+  { id:"defend",  icon:"🛡️",  name:"ป้องกัน",    desc:"บล็อกการโจมตี 1 ครั้ง", cost:2, type:"defend" },
+  { id:"steal",   icon:"💜",  name:"ขโมยชีวิต",  desc:"ขโมย 1 HP จากศัตรู", cost:3, type:"steal"  },
+  { id:"heal",    icon:"💚",  name:"รักษา",       desc:"ฟื้น 1 HP",         cost:2, type:"heal"   },
+];
+
+const TEAM_COLORS = ["#e74c3c","#3498db","#2ecc71","#f39c12"];
+const MAX_HP = 10;
+const TOTAL_Q = 20;
+
+// ─── LOCAL STATE ──────────────────────────────
+let myRole    = null;   // 'host' | 'player'
+let myTeamIdx = null;
+let roomCode  = null;
+let unsubRoom = null;
+let lastGameState = null;
+
+// ─── HELPERS ──────────────────────────────────
+const roomRef = (code) => ref(db, `rooms/${code}`);
+const rand = (n) => Math.floor(Math.random() * n);
+
+function genCode() {
+  return Math.random().toString(36).slice(2,8).toUpperCase();
+}
+function drawRandomCard() {
+  return { ...SKILL_CARDS[rand(SKILL_CARDS.length)] };
+}
+
+// ─── UI HELPERS ───────────────────────────────
+const $ = id => document.getElementById(id);
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+function toast(msg, ms = 2500) {
+  const t = $('toast');
+  t.innerHTML = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+function setLoading(show, msg = 'กำลังโหลด...') {
+  $('loading-overlay').style.display = show ? 'flex' : 'none';
+  $('loading-msg').textContent = msg;
+}
+
+// ════════════════════════════════════════════════
+//  LOBBY
+// ════════════════════════════════════════════════
+async function hostGame() {
+  const code = genCode();
+  roomCode = code;
+  myRole = 'host';
+  myTeamIdx = null;
+
+  const teams = Array.from({length:4}, (_,i) => ({
+    name: `ทีม ${i+1}`, players: [], color: TEAM_COLORS[i],
+    hp: MAX_HP, gold: 0, cards: [], shield: false, eliminated: false
+  }));
+
+  await set(roomRef(code), {
+    phase: 'lobby',
+    host: true,
+    currentQ: 0,
+    currentTeamTurn: 0,
+    battleTurn: 0,
+    teams,
+    log: 'รอผู้เล่นเข้าร่วม...',
+    winner: null,
+    createdAt: serverTimestamp()
+  });
+
+  $('room-code-display').textContent = code;
+  showScreen('host-lobby');
+  listenRoom(code);
+}
+
+async function joinGame() {
+  const code = $('join-code').value.trim().toUpperCase();
+  const name  = $('join-name').value.trim();
+  const teamI = parseInt($('join-team').value);
+  if (!code || !name) { toast('❌ กรอก Room Code และชื่อด้วยนะ'); return; }
+
+  setLoading(true, 'กำลังเข้าร่วม...');
+  try {
+    const snap = await get(roomRef(code));
+    if (!snap.exists()) { toast('❌ ไม่พบห้องนี้'); setLoading(false); return; }
+    const data = snap.val();
+    if (data.phase !== 'lobby') { toast('❌ เกมเริ่มไปแล้ว'); setLoading(false); return; }
+
+    // push player into team
+    const team = data.teams[teamI];
+    const existingPlayers = team.players || [];
+    if (existingPlayers.length >= 2) { toast('❌ ทีมนี้เต็มแล้ว (2/2)'); setLoading(false); return; }
+    existingPlayers.push(name);
+    await update(ref(db, `rooms/${code}/teams/${teamI}`), { players: existingPlayers });
+
+    roomCode  = code;
+    myRole    = 'player';
+    myTeamIdx = teamI;
+
+    showScreen('waiting-screen');
+    $('waiting-code').textContent = code;
+    listenRoom(code);
+  } catch(e) {
+    toast('❌ เกิดข้อผิดพลาด: ' + e.message);
+  }
+  setLoading(false);
+}
+
+// ════════════════════════════════════════════════
+//  FIREBASE LISTENER
+// ════════════════════════════════════════════════
+function listenRoom(code) {
+  if (unsubRoom) unsubRoom();
+  unsubRoom = onValue(roomRef(code), snap => {
+    if (!snap.exists()) return;
+    const g = snap.val();
+    lastGameState = g;
+    syncUI(g);
+  });
+}
+
+function syncUI(g) {
+  // update host lobby player list
+  if (g.phase === 'lobby') {
+    renderHostLobby(g);
+    if (myRole === 'player') renderWaiting(g);
+    return;
+  }
+  if (g.phase === 'quiz')   { showScreen('quiz-screen');   renderQuiz(g);   return; }
+  if (g.phase === 'shop')   { showScreen('shop-screen');   renderShop(g);   return; }
+  if (g.phase === 'battle') { showScreen('battle-screen'); renderBattle(g); return; }
+  if (g.phase === 'result') { showScreen('result-screen'); renderResult(g); return; }
+}
+
+// ════════════════════════════════════════════════
+//  HOST LOBBY
+// ════════════════════════════════════════════════
+function renderHostLobby(g) {
+  const list = $('lobby-team-list');
+  list.innerHTML = g.teams.map((t,i) => {
+    const players = t.players || [];
+    return `
+    <div class="lobby-team-row" style="border-left:3px solid ${t.color}">
+      <span style="color:${t.color};font-weight:700">${t.name||'ทีม '+(i+1)}</span>
+      <span>${players.length > 0 ? players.join(' & ') : '<span style="color:#666">รอผู้เล่น...</span>'}</span>
+      <span style="font-size:0.8rem;color:#a0b4d6">${players.length}/2</span>
+    </div>`;}).join('');
+
+  const totalPlayers = g.teams.reduce((s,t) => s + (t.players||[]).length, 0);
+  $('start-btn').disabled = totalPlayers < 1; // allow starting with any players for testing
+}
+
+async function setTeamName(idx) {
+  const name = prompt(`ชื่อทีม ${idx+1}:`);
+  if (name) await update(ref(db, `rooms/${roomCode}/teams/${idx}`), { name });
+}
+
+async function startQuiz() {
+  setLoading(true, 'กำลังเริ่มเกม...');
+  // reset quiz state
+  await update(roomRef(roomCode), {
+    phase: 'quiz',
+    currentQ: 0,
+    currentTeamTurn: 0,
+    quizAnswered: false,
+    log: 'เริ่มตอบคำถาม!'
+  });
+  setLoading(false);
+}
+
+// ════════════════════════════════════════════════
+//  QUIZ PHASE
+// ════════════════════════════════════════════════
+function renderQuiz(g) {
+  const qIdx  = g.currentQ || 0;
+  const tIdx  = g.currentTeamTurn || 0;
+  const team  = g.teams[tIdx];
+  const q     = QUESTIONS[qIdx];
+  const isMyTurn = myRole === 'host' || myTeamIdx === tIdx;
+
+  $('q-counter').textContent = `ข้อ ${qIdx+1}/${TOTAL_Q}`;
+  $('q-turn-label').textContent = team.name;
+  $('progress-bar').style.width = `${(qIdx/TOTAL_Q)*100}%`;
+
+  const banner = $('current-team-banner');
+  banner.textContent = `🎯 ${team.name} — ${team.players.join(' & ') || 'รอผู้เล่น'}`;
+  banner.style.background = team.color + '33';
+  banner.style.border = `1px solid ${team.color}`;
+
+  $('question-text').textContent = q.q;
+
+  // reward area
+  $('reward-area').style.display = 'none';
+
+  const opts = $('answer-options');
+  // show answered state if already answered
+  if (g.quizAnswered) {
+    opts.innerHTML = q.opts.map((o,i) => `
+      <button class="opt-btn ${i===q.ans?'correct':''}" disabled>${o}</button>`).join('');
+    showQuizReward(g, tIdx);
+    return;
+  }
+
+  opts.innerHTML = q.opts.map((o,i) => `
+    <button class="opt-btn" ${!isMyTurn ? 'disabled' : ''} onclick="answerQuiz(${i})">${o}</button>`).join('');
+
+  $('answer-feedback').style.display = 'none';
+  if (!isMyTurn) {
+    $('answer-feedback').style.display = 'block';
+    $('answer-feedback').style.background = 'rgba(255,255,255,0.05)';
+    $('answer-feedback').style.border = '1px solid rgba(255,255,255,0.1)';
+    $('answer-feedback').textContent = `⏳ รอ ${team.name} ตอบ...`;
+  }
+}
+
+window.answerQuiz = async function(chosen) {
+  if (!lastGameState) return;
+  const g    = lastGameState;
+  const qIdx = g.currentQ || 0;
+  const tIdx = g.currentTeamTurn || 0;
+  const q    = QUESTIONS[qIdx];
+  const correct = chosen === q.ans;
+
+  // disable buttons immediately
+  document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
+
+  const updates = {};
+  const team = { ...g.teams[tIdx] };
+
+  if (correct) {
+    const drawn = drawRandomCard();
+    if (!team.cards) team.cards = [];
+    team.cards.push(drawn);
+    team.gold = (team.gold || 0) + 1;
+    updates[`rooms/${roomCode}/teams/${tIdx}`] = team;
+    updates[`rooms/${roomCode}/quizAnswered`]  = true;
+    updates[`rooms/${roomCode}/lastDrawnCard`] = drawn;
+    updates[`rooms/${roomCode}/lastAnswerCorrect`] = true;
+  } else {
+    team.gold = (team.gold || 0) + 1;
+    updates[`rooms/${roomCode}/teams/${tIdx}`] = team;
+    updates[`rooms/${roomCode}/quizAnswered`]  = true;
+    updates[`rooms/${roomCode}/lastDrawnCard`] = null;
+    updates[`rooms/${roomCode}/lastAnswerCorrect`] = false;
+  }
+  await update(ref(db), updates);
+};
+
+function showQuizReward(g, tIdx) {
+  $('reward-area').style.display = 'block';
+  const correct = g.lastAnswerCorrect;
+  const card    = g.lastDrawnCard;
+  const team    = g.teams[tIdx];
+
+  if (correct && card) {
+    $('reward-title').textContent  = '🃏 จั่วการ์ดได้!';
+    $('dc-icon').textContent       = card.icon;
+    $('dc-name').textContent       = card.name;
+    $('dc-desc').textContent       = card.desc;
+    $('drawn-card-display').style.display = 'block';
+    $('reward-gold').innerHTML     = `💰 +1 ทอง (รวม ${team.gold})`;
+  } else {
+    $('reward-title').textContent  = '😔 ไม่ได้การ์ด';
+    $('drawn-card-display').style.display = 'none';
+    $('reward-gold').innerHTML     = `💰 +1 ทองปลอบใจ (รวม ${team.gold})`;
+  }
+
+  // show next button only to current team or host
+  const isMyTurn = myRole === 'host' || myTeamIdx === (g.currentTeamTurn || 0);
+  $('next-q-btn').style.display = isMyTurn ? 'inline-block' : 'none';
+  if (!isMyTurn) {
+    const waiting = document.createElement('div');
+    waiting.style.cssText = 'color:#a0b4d6;font-size:0.85rem;margin-top:8px';
+    waiting.textContent = '⏳ รอทีมนั้นกด "ถัดไป"...';
+    $('reward-area').appendChild(waiting);
+  }
+}
+
+window.nextQuestion = async function() {
+  if (!lastGameState) return;
+  const g    = lastGameState;
+  const qIdx = (g.currentQ || 0) + 1;
+  const tIdx = ((g.currentTeamTurn || 0) + 1) % 4;
+
+  if (qIdx >= TOTAL_Q) {
+    // move to shop
+    await update(roomRef(roomCode), {
+      phase: 'shop',
+      shopTeamIdx: 0,
+      currentQ: qIdx,
+      quizAnswered: false,
+      log: 'เข้าสู่ Phase Shop!'
+    });
+  } else {
+    await update(roomRef(roomCode), {
+      currentQ: qIdx,
+      currentTeamTurn: tIdx,
+      quizAnswered: false,
+      lastDrawnCard: null,
+      lastAnswerCorrect: false,
+      log: `ข้อ ${qIdx+1}: ${g.teams[tIdx].name}`
+    });
+  }
+};
+
+// ════════════════════════════════════════════════
+//  SHOP PHASE
+// ════════════════════════════════════════════════
+function renderShop(g) {
+  const sIdx = g.shopTeamIdx || 0;
+  const team = g.teams[sIdx];
+  const isMyTurn = myRole === 'host' || myTeamIdx === sIdx;
+
+  $('shop-phase-title').textContent = `${team.name} — ช้อปการ์ด`;
+  $('shop-drawn-cards').textContent = team.cards && team.cards.length > 0
+    ? team.cards.map(c => c.icon + c.name).join(', ')
+    : 'ยังไม่มีการ์ด';
+  $('shop-gold-amt').textContent = team.gold || 0;
+
+  const grid = $('shop-grid');
+  grid.innerHTML = SKILL_CARDS.map(sk => `
+    <div class="skill-card ${!isMyTurn ? 'disabled-card' : ''}" onclick="${isMyTurn ? `buyCard('${sk.id}')` : ''}">
+      <div class="skill-icon">${sk.icon}</div>
+      <div class="skill-name">${sk.name}</div>
+      <div class="skill-desc">${sk.desc}</div>
+      <div class="skill-cost">💰 ${sk.cost}</div>
+    </div>`).join('');
+
+  $('shop-next-btn').style.display = isMyTurn ? 'inline-block' : 'none';
+  $('shop-waiting').style.display  = isMyTurn ? 'none' : 'block';
+  $('shop-waiting').textContent    = `⏳ รอ ${team.name} ช้อปการ์ด...`;
+}
+
+window.buyCard = async function(skillId) {
+  if (!lastGameState) return;
+  const g    = lastGameState;
+  const sIdx = g.shopTeamIdx || 0;
+  const team = { ...g.teams[sIdx], cards: [...(g.teams[sIdx].cards || [])] };
+  const sk   = SKILL_CARDS.find(s => s.id === skillId);
+  if (!sk) return;
+  if ((team.gold || 0) < sk.cost) { toast('❌ ทองไม่พอ!'); return; }
+  team.gold -= sk.cost;
+  team.cards.push({ ...sk });
+  await update(ref(db, `rooms/${roomCode}/teams/${sIdx}`), team);
+  toast(`✅ ซื้อ ${sk.icon}${sk.name}!`);
+};
+
+window.shopNext = async function() {
+  if (!lastGameState) return;
+  const g    = lastGameState;
+  const next = (g.shopTeamIdx || 0) + 1;
+  if (next >= 4) {
+    await update(roomRef(roomCode), {
+      phase: 'battle',
+      battleTurn: 0,
+      battleTurnTeam: 0,
+      pendingCard: null,
+      log: '⚔️ เริ่มสู้การ์ด!'
+    });
+  } else {
+    await update(roomRef(roomCode), { shopTeamIdx: next });
+  }
+};
+
+// ════════════════════════════════════════════════
+//  BATTLE PHASE
+// ════════════════════════════════════════════════
+function renderBattle(g) {
+  const turnTeamIdx = g.battleTurnTeam ?? 0;
+  // skip eliminated teams
+  const alive = g.teams.filter(t => !t.eliminated && t.hp > 0);
+  if (alive.length <= 1) {
+    // auto trigger result from client if host
+    if (myRole === 'host') triggerResult(g);
+    return;
+  }
+
+  const team = g.teams[turnTeamIdx];
+  const isMyTurn = myRole === 'host' || myTeamIdx === turnTeamIdx;
+
+  $('battle-turn-label').textContent = `⚔️ เทิร์นของ ${team.name}`;
+
+  // teams display
+  $('battle-teams-display').innerHTML =
+    `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">` +
+    g.teams.map((t,i) => `
+      <div class="battle-team" style="border:2px solid ${i===turnTeamIdx ? t.color : 'rgba(255,255,255,0.1)'}">
+        <div class="battle-team-name" style="color:${t.color}">${t.name}${t.shield?'🛡️':''}${t.hp<=0?'💀':''}</div>
+        <div style="font-size:0.75rem;color:#a0b4d6">${(t.players||[]).join(' & ')}</div>
+        <div class="hp-bar-wrap"><div class="hp-bar" style="width:${Math.max(0,(t.hp/MAX_HP)*100)}%;background:${t.hp>5?'#27ae60':t.hp>2?'#f39c12':'#e74c3c'}"></div></div>
+        <div class="hp-text">❤️ ${Math.max(0,t.hp||0)}/${MAX_HP} ${t.hp<=0?'(แพ้)':''}</div>
+        <div style="font-size:0.75rem;color:#a0b4d6">🃏 ${(t.cards||[]).length} ใบ</div>
+      </div>`).join('') + '</div>';
+
+  $('battle-log').textContent = g.log || '...';
+
+  // hand
+  const handDiv = $('hand-cards');
+  handDiv.innerHTML = '';
+  $('target-select').style.display = 'none';
+
+  if (!isMyTurn) {
+    handDiv.innerHTML = `<div style="color:#a0b4d6;font-size:0.85rem">⏳ รอ ${team.name} เล่น...</div>`;
+    $('end-turn-btn').style.display = 'none';
+    return;
+  }
+
+  $('end-turn-btn').style.display = 'inline-block';
+
+  const cards = team.cards || [];
+  if (cards.length === 0) {
+    handDiv.innerHTML = '<div style="color:#a0b4d6;font-size:0.85rem">ไม่มีการ์ด — กดผ่านเทิร์น</div>';
+    return;
+  }
+  cards.forEach((card, i) => {
+    const btn = document.createElement('button');
+    btn.className = `hand-card ${card.type}`;
+    btn.innerHTML = `${card.icon} ${card.name}`;
+    btn.onclick = () => selectBattleCard(card, i, turnTeamIdx, g);
+    handDiv.appendChild(btn);
+  });
+}
+
+function selectBattleCard(card, cardIdx, teamIdx, g) {
+  // must answer a question first
+  openBattleQuiz(g, (correct) => {
+    if (!correct) { toast('❌ ตอบผิด การ์ดถูกยกเลิก!'); return; }
+    if (card.type === 'defend' || card.type === 'heal') {
+      applyBattleCard(card, cardIdx, teamIdx, teamIdx, g);
+    } else {
+      showTargetSelect(card, cardIdx, teamIdx, g);
+    }
+  });
+}
+
+function showTargetSelect(card, cardIdx, teamIdx, g) {
+  const ts = $('target-select');
+  ts.style.display = 'flex';
+  ts.innerHTML = '<div style="width:100%;color:#a0b4d6;font-size:0.85rem;text-align:center;margin-bottom:8px">🎯 เลือกเป้าหมาย:</div>';
+  g.teams.forEach((t, i) => {
+    if (i === teamIdx || t.hp <= 0) return;
+    const btn = document.createElement('button');
+    btn.className = 'target-btn';
+    btn.textContent = `${t.name} ❤️${t.hp}`;
+    btn.onclick = () => { ts.style.display='none'; applyBattleCard(card, cardIdx, teamIdx, i, g); };
+    ts.appendChild(btn);
+  });
+}
+
+async function applyBattleCard(card, cardIdx, attackerIdx, targetIdx, g) {
+  const teams   = g.teams.map(t => ({ ...t, cards: [...(t.cards||[])], players: [...(t.players||[])] }));
+  const attacker = teams[attackerIdx];
+  const target   = teams[targetIdx];
+  let logMsg = '';
+
+  // remove card from hand
+  attacker.cards.splice(cardIdx, 1);
+
+  if (card.type === 'attack') {
+    const dmg = card.dmg || 2;
+    if (target.shield) {
+      target.shield = false;
+      logMsg = `⚔️ ${attacker.name} โจมตี ${target.name} แต่โดนป้องกัน! 🛡️`;
+    } else {
+      target.hp = Math.max(0, (target.hp||0) - dmg);
+      logMsg = `⚔️ ${attacker.name} โจมตี ${target.name} -${dmg} HP! (เหลือ ${target.hp})`;
+      if (target.hp <= 0) { target.eliminated = true; logMsg += ` 💀 ${target.name} แพ้!`; }
+    }
+  } else if (card.type === 'defend') {
+    attacker.shield = true;
+    logMsg = `🛡️ ${attacker.name} ตั้งรับ!`;
+  } else if (card.type === 'heal') {
+    attacker.hp = Math.min(MAX_HP, (attacker.hp||0) + 1);
+    logMsg = `💚 ${attacker.name} ฟื้น 1 HP! (${attacker.hp} HP)`;
+  } else if (card.type === 'steal') {
+    if (target.shield) {
+      target.shield = false;
+      logMsg = `💜 ${attacker.name} ขโมย HP แต่โดนป้องกัน! 🛡️`;
+    } else {
+      target.hp  = Math.max(0, (target.hp||0) - 1);
+      attacker.hp = Math.min(MAX_HP, (attacker.hp||0) + 1);
+      if (target.hp <= 0) { target.eliminated = true; logMsg += ` 💀 ${target.name} แพ้!`; }
+      logMsg = `💜 ${attacker.name} ขโมย 1 HP จาก ${target.name}!`;
+    }
+  }
+
+  const alive = teams.filter(t => !t.eliminated && t.hp > 0);
+
+  // next turn (skip dead)
+  let nextTurn = ((g.battleTurn || 0) + 1);
+  let nextTeam = nextTurn % 4;
+  let safety   = 0;
+  while ((teams[nextTeam].hp <= 0 || teams[nextTeam].eliminated) && safety < 8) {
+    nextTurn++; nextTeam = nextTurn % 4; safety++;
+  }
+
+  const updates = { log: logMsg, battleTurn: nextTurn, battleTurnTeam: nextTeam };
+  teams.forEach((t, i) => { updates[`rooms/${roomCode}/teams/${i}`] = t; });
+  updates[`rooms/${roomCode}/log`]            = logMsg;
+  updates[`rooms/${roomCode}/battleTurn`]     = nextTurn;
+  updates[`rooms/${roomCode}/battleTurnTeam`] = nextTeam;
+
+  if (alive.length <= 1) {
+    updates[`rooms/${roomCode}/phase`]  = 'result';
+    updates[`rooms/${roomCode}/winner`] = alive.length === 1 ? alive[0].name : findHPWinner(teams);
+  }
+
+  await update(ref(db), updates);
+}
+
+function findHPWinner(teams) {
+  return [...teams].sort((a,b) => (b.hp||0) - (a.hp||0))[0].name;
+}
+
+async function triggerResult(g) {
+  const alive = g.teams.filter(t => !t.eliminated && t.hp > 0);
+  const winner = alive.length === 1 ? alive[0].name : findHPWinner(g.teams);
+  await update(roomRef(roomCode), { phase: 'result', winner });
+}
+
+window.endTurn = async function() {
+  if (!lastGameState) return;
+  const g = lastGameState;
+  let nextTurn = ((g.battleTurn || 0) + 1);
+  let nextTeam = nextTurn % 4;
+  let safety = 0;
+  while ((g.teams[nextTeam].hp <= 0 || g.teams[nextTeam].eliminated) && safety < 8) {
+    nextTurn++; nextTeam = nextTurn % 4; safety++;
+  }
+  await update(roomRef(roomCode), {
+    battleTurn: nextTurn,
+    battleTurnTeam: nextTeam,
+    log: `${g.teams[nextTeam].name} — เทิร์นใหม่`
+  });
+};
+
+// ─── Battle Quiz Overlay ──────────────────────
+function openBattleQuiz(g, callback) {
+  const overlay = $('battle-quiz');
+  overlay.classList.add('active');
+  const rq = QUESTIONS[rand(QUESTIONS.length)];
+  $('bq-question').textContent = rq.q;
+  const opts = $('bq-options');
+  opts.innerHTML = '';
+  $('bq-feedback').style.display = 'none';
+  let answered = false;
+  rq.opts.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn'; btn.textContent = opt;
+    btn.onclick = () => {
+      if (answered) return; answered = true;
+      opts.querySelectorAll('button').forEach(b => b.disabled = true);
+      const fb = $('bq-feedback'); fb.style.display = 'block';
+      if (i === rq.ans) {
+        btn.classList.add('correct');
+        fb.style.background = 'rgba(39,174,96,0.2)'; fb.style.border = '1px solid #27ae60';
+        fb.textContent = '✅ ถูกต้อง! ใช้การ์ดได้!';
+        setTimeout(() => { overlay.classList.remove('active'); callback(true); }, 1100);
+      } else {
+        btn.classList.add('wrong');
+        opts.querySelectorAll('button')[rq.ans].classList.add('correct');
+        fb.style.background = 'rgba(192,57,43,0.2)'; fb.style.border = '1px solid #c0392b';
+        fb.textContent = `❌ ผิด! คำตอบคือ: ${rq.opts[rq.ans]}`;
+        setTimeout(() => { overlay.classList.remove('active'); callback(false); }, 1400);
+      }
+    };
+    opts.appendChild(btn);
+  });
+}
+
+// ════════════════════════════════════════════════
+//  RESULT
+// ════════════════════════════════════════════════
+function renderResult(g) {
+  $('winner-text').textContent = `🎉 ${g.winner} ชนะ!`;
+  const sorted = [...g.teams].sort((a,b) => (b.hp||0) - (a.hp||0));
+  $('final-scoreboard').innerHTML =
+    '<div style="margin-bottom:12px;font-weight:700;color:var(--gold-light)">📊 ผลการแข่งขัน</div>' +
+    sorted.map((t,rank) => `
+      <div class="score-row">
+        <div><span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][rank]} ${t.name}</span>
+          <span style="font-size:0.8rem;color:#a0b4d6;margin-left:8px">${(t.players||[]).join(' & ')}</span></div>
+        <div class="score-hp">${(t.hp||0)<=0?'💀':`❤️ ${t.hp}`}</div>
+      </div>`).join('');
+
+  $('play-again-btn').style.display = myRole === 'host' ? 'inline-block' : 'none';
+}
+
+window.playAgain = async function() {
+  const teams = (lastGameState?.teams || []).map(t => ({
+    ...t, hp: MAX_HP, gold: 0, cards: [], shield: false, eliminated: false
+  }));
+  await update(roomRef(roomCode), {
+    phase: 'lobby', currentQ: 0, currentTeamTurn: 0,
+    battleTurn: 0, battleTurnTeam: 0, winner: null,
+    quizAnswered: false, teams, log: 'เริ่มใหม่!'
+  });
+};
+
+// ─── WAITING SCREEN ───────────────────────────
+function renderWaiting(g) {
+  $('waiting-teams').innerHTML = g.teams.map((t,i) => {
+    const players = t.players || [];
+    return `<div style="color:${t.color};font-weight:700">
+      ${t.name||'ทีม '+(i+1)}: ${players.length > 0 ? players.join(' & ') : 'รอ...'}
+    </div>`;}).join('');
+}
+
+// ─── EXPOSE GLOBALS ───────────────────────────
+window.hostGame    = hostGame;
+window.joinGame    = joinGame;
+window.startQuiz   = startQuiz;
+window.setTeamName = setTeamName;
+window.shopNext    = shopNext;
+window.nextQuestion = nextQuestion;
+</script>
+
+<style>
+:root {
+  --navy:       #0d1b4b;
+  --gold:       #c9a227;
+  --gold-light: #f0d060;
+  --cream:      #faf7ef;
+  --green:      #27ae60;
+  --red:        #c0392b;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:'Sarabun',sans-serif;
+  background:var(--navy); min-height:100vh;
+  overflow-x:hidden; color:#fff;
+}
+#stars-canvas { position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0; }
+.eiffel-bg { position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:300px;opacity:0.06;pointer-events:none;z-index:0; }
+
+/* SCREENS */
+.screen { display:none;position:relative;z-index:10;min-height:100vh;padding:20px;flex-direction:column;align-items:center;justify-content:center;gap:18px; }
+.screen.active { display:flex; }
+
+/* TYPOGRAPHY */
+.game-title { font-family:'Playfair Display',serif;font-size:2.8rem;font-weight:900;color:var(--gold-light);text-shadow:0 0 30px rgba(201,162,39,.6);text-align:center;line-height:1.1; }
+.game-subtitle { font-size:1rem;color:#a0b4d6;letter-spacing:3px;text-transform:uppercase;margin-top:6px; }
+.phase-tag { display:inline-block;padding:4px 16px;border-radius:20px;font-size:.75rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;background:rgba(201,162,39,.2);color:var(--gold-light);border:1px solid var(--gold);margin-bottom:10px; }
+.gold-line { width:80px;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:12px auto; }
+
+/* CARD */
+.card { background:rgba(255,255,255,.07);border:1px solid rgba(201,162,39,.3);border-radius:16px;backdrop-filter:blur(10px);padding:20px; }
+
+/* BUTTONS */
+.btn { padding:12px 28px;border:none;border-radius:50px;font-family:'Sarabun',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:1px; }
+.btn-gold { background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--navy);box-shadow:0 4px 20px rgba(201,162,39,.4); }
+.btn-gold:hover { transform:translateY(-2px);box-shadow:0 6px 28px rgba(201,162,39,.6); }
+.btn-gold:disabled { opacity:.4;cursor:not-allowed;transform:none; }
+.btn-outline { background:transparent;color:var(--gold-light);border:2px solid var(--gold); }
+.btn-outline:hover { background:rgba(201,162,39,.15); }
+
+/* INPUTS */
+input[type=text], input[type=password] {
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-radius:8px;
+  padding:10px 14px;color:#fff;font-family:'Sarabun',sans-serif;font-size:1rem;width:100%;
+}
+input:focus { outline:none;border-color:var(--gold); }
+input::placeholder { color:rgba(255,255,255,.35); }
+select {
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-radius:8px;
+  padding:10px 14px;color:#fff;font-family:'Sarabun',sans-serif;font-size:1rem;width:100%;
+}
+
+/* JOIN FORM */
+.join-form { display:flex;flex-direction:column;gap:12px;width:100%;max-width:380px; }
+
+/* LOBBY TEAM LIST */
+.lobby-team-row { display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;gap:8px; }
+
+/* QUIZ */
+.quiz-box { width:100%;max-width:600px; }
+.current-team-banner { text-align:center;padding:10px;border-radius:10px;margin-bottom:12px;font-weight:700; }
+.question-text { font-size:1.3rem;font-weight:700;text-align:center;margin:8px 0 20px;color:var(--cream);line-height:1.4; }
+.answer-options { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+.opt-btn { padding:12px;border:2px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.05);color:#fff;font-family:'Sarabun',sans-serif;font-size:.95rem;cursor:pointer;transition:all .2s;font-weight:600; }
+.opt-btn:hover:not(:disabled) { border-color:var(--gold);background:rgba(201,162,39,.15); }
+.opt-btn.correct { border-color:var(--green);background:rgba(39,174,96,.25); }
+.opt-btn.wrong   { border-color:var(--red);background:rgba(192,57,43,.25); }
+.opt-btn:disabled { cursor:default;opacity:.8; }
+.progress-bar-wrap { background:rgba(255,255,255,.1);border-radius:10px;height:6px;overflow:hidden; }
+.progress-bar { height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-light));border-radius:10px;transition:width .4s; }
+
+/* REWARD */
+.draw-reveal { display:flex;flex-direction:column;align-items:center;gap:10px; }
+.drawn-card { background:rgba(255,255,255,.08);border-radius:14px;padding:14px 24px;text-align:center;border:2px solid var(--gold);animation:cardPop .4s cubic-bezier(.34,1.56,.64,1); }
+@keyframes cardPop { from{transform:scale(.5) rotateY(90deg);opacity:0} to{transform:scale(1) rotateY(0);opacity:1} }
+.drawn-card-icon { font-size:2.2rem; }
+.drawn-card-name { font-weight:700;font-size:1rem;margin-top:4px;color:var(--gold-light); }
+.drawn-card-desc { font-size:.8rem;color:#a0b4d6;margin-top:4px; }
+
+/* SHOP */
+.shop-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:580px; }
+.skill-card { background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px;text-align:center;cursor:pointer;transition:all .2s; }
+.skill-card:hover { border-color:var(--gold);transform:translateY(-2px); }
+.skill-card.disabled-card { opacity:.5;cursor:default; }
+.skill-icon { font-size:1.8rem;margin-bottom:6px; }
+.skill-name { font-weight:700;font-size:.9rem;margin-bottom:4px; }
+.skill-desc { font-size:.75rem;color:#a0b4d6;margin-bottom:8px; }
+.skill-cost { font-size:.85rem;color:var(--gold-light);font-weight:700; }
+
+/* BATTLE */
+.battle-team { background:rgba(255,255,255,.06);border-radius:14px;padding:14px;text-align:center; }
+.battle-team-name { font-weight:700;font-size:.95rem;margin-bottom:6px; }
+.hp-bar-wrap { background:rgba(0,0,0,.3);border-radius:10px;height:8px;overflow:hidden;margin:6px 0; }
+.hp-bar { height:100%;border-radius:10px;transition:width .5s; }
+.hp-text { font-size:.8rem;color:#a0b4d6; }
+.hand-area { margin-top:12px;padding:12px;background:rgba(0,0,0,.2);border-radius:12px; }
+.hand-label { font-size:.75rem;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px; }
+.hand-cards { display:flex;gap:8px;flex-wrap:wrap;justify-content:center; }
+.hand-card { padding:8px 14px;border-radius:8px;border:2px solid;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .2s; }
+.hand-card:hover { transform:translateY(-3px) scale(1.05); }
+.hand-card.attack { border-color:#e74c3c;background:rgba(231,76,60,.15);color:#ff8e86; }
+.hand-card.defend { border-color:#3498db;background:rgba(52,152,219,.15);color:#82cfff; }
+.hand-card.heal   { border-color:#27ae60;background:rgba(39,174,96,.15);color:#7effc0; }
+.hand-card.steal  { border-color:#9b59b6;background:rgba(155,89,182,.15);color:#c39bd3; }
+.battle-log { margin-top:10px;background:rgba(0,0,0,.3);border-radius:10px;padding:10px 14px;font-size:.85rem;color:#c0d4f0;min-height:36px; }
+.target-select { display:none;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px; }
+.target-btn { padding:8px 16px;border-radius:8px;border:2px solid var(--gold);background:rgba(201,162,39,.1);color:var(--gold-light);font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif; }
+.target-btn:hover { background:rgba(201,162,39,.25); }
+
+/* BATTLE QUIZ OVERLAY */
+#battle-quiz { display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px; }
+#battle-quiz.active { display:flex; }
+.bq-box { max-width:520px;width:100%; }
+
+/* RESULT */
+.trophy { font-size:5rem;animation:bounce 1s infinite alternate; }
+@keyframes bounce { from{transform:translateY(0)} to{transform:translateY(-12px)} }
+.winner-text { font-family:'Playfair Display',serif;font-size:2rem;font-weight:900;color:var(--gold-light);text-shadow:0 0 20px rgba(240,208,96,.5); }
+.score-row { display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;margin-bottom:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1); }
+.score-hp { font-weight:700;color:var(--gold-light); }
+
+/* TOAST */
+#toast { position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);background:rgba(10,20,50,.95);border:1px solid var(--gold);border-radius:10px;padding:10px 22px;color:#fff;font-weight:700;z-index:999;transition:transform .3s;backdrop-filter:blur(10px);text-align:center; }
+#toast.show { transform:translateX(-50%) translateY(0); }
+
+/* LOADING */
+#loading-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:800;align-items:center;justify-content:center;flex-direction:column;gap:12px;backdrop-filter:blur(4px); }
+.spinner { width:40px;height:40px;border:4px solid rgba(201,162,39,.3);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ROOM CODE */
+.room-code-big { font-family:'Playfair Display',serif;font-size:3rem;font-weight:900;color:var(--gold-light);letter-spacing:8px;text-align:center;text-shadow:0 0 20px rgba(240,208,96,.5); }
+</style>
+</head>
+<body>
+
+<canvas id="stars-canvas"></canvas>
+<svg class="eiffel-bg" viewBox="0 0 200 400" fill="none">
+  <path d="M100 10L60 150H40L35 170H65L55 250H30L25 270H75L70 380H130L125 270H175L170 250H145L135 170H165L160 150H140Z" fill="white"/>
+  <rect x="50" y="148" width="100" height="5" fill="white"/>
+  <rect x="30" y="248" width="140" height="5" fill="white"/>
+  <rect x="95" y="5" width="10" height="18" fill="white"/>
+</svg>
+
+<div id="toast"></div>
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div id="loading-msg" style="color:var(--gold-light);font-weight:700">กำลังโหลด...</div>
+</div>
+
+<!-- ══ BATTLE QUIZ OVERLAY ══ -->
+<div id="battle-quiz">
+  <div class="bq-box card">
+    <div class="phase-tag" style="margin-bottom:10px">ตอบก่อนใช้การ์ด!</div>
+    <div class="question-text" id="bq-question"></div>
+    <div class="answer-options" id="bq-options"></div>
+    <div id="bq-feedback" style="display:none;margin-top:12px;text-align:center;padding:10px;border-radius:10px;font-weight:700"></div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: HOME ══════════ -->
+<div id="home" class="screen active">
+  <div style="text-align:center">
+    <div style="font-size:.85rem;color:var(--gold);letter-spacing:3px;text-transform:uppercase;margin-bottom:10px">🗼 Bonjour!</div>
+    <div class="game-title">Français<br>Battle</div>
+    <div class="game-subtitle">เกมสู้การ์ดภาษาฝรั่งเศสออนไลน์</div>
+  </div>
+  <div class="gold-line"></div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+    <button class="btn btn-gold" onclick="showScreen('create-room')">🏰 สร้างห้อง (ครู)</button>
+    <button class="btn btn-outline" onclick="showScreen('join-room')">🚪 เข้าร่วม (นักเรียน)</button>
+  </div>
+  <div style="font-size:.8rem;color:#4060a0;text-align:center;max-width:340px">ตอบถูก → จั่วการ์ดฟรี → สู้กัน → ใครเหลือ HP ชนะ!</div>
+</div>
+
+<!-- ══════════ SCREEN: CREATE ROOM ══════════ -->
+<div id="create-room" class="screen">
+  <div style="text-align:center">
+    <div class="phase-tag">สร้างห้อง</div>
+    <div style="font-size:1.4rem;font-weight:700;color:var(--gold-light)">🏰 ครูสร้างห้องเกม</div>
+  </div>
+  <div class="card" style="width:100%;max-width:400px;text-align:center">
+    <div style="font-size:.9rem;color:#a0b4d6;margin-bottom:16px">กดสร้างห้อง แล้วแชร์ Room Code ให้นักเรียน</div>
+    <button class="btn btn-gold" style="width:100%" onclick="hostGame()">✨ สร้างห้องใหม่</button>
+  </div>
+  <button class="btn btn-outline" onclick="showScreen('home')">← กลับ</button>
+</div>
+
+<!-- ══════════ SCREEN: JOIN ROOM ══════════ -->
+<div id="join-room" class="screen">
+  <div style="text-align:center">
+    <div class="phase-tag">เข้าร่วม</div>
+    <div style="font-size:1.4rem;font-weight:700;color:var(--gold-light)">🚪 นักเรียนเข้าร่วม</div>
+  </div>
+  <div class="join-form card">
+    <input type="text" id="join-code" placeholder="Room Code (เช่น AB12CD)" maxlength="6" style="text-transform:uppercase;letter-spacing:4px;font-size:1.2rem;text-align:center">
+    <input type="text" id="join-name" placeholder="ชื่อของคุณ">
+    <select id="join-team">
+      <option value="0">🔴 ทีม 1</option>
+      <option value="1">🔵 ทีม 2</option>
+      <option value="2">🟢 ทีม 3</option>
+      <option value="3">🟡 ทีม 4</option>
+    </select>
+    <button class="btn btn-gold" onclick="joinGame()">เข้าร่วม →</button>
+  </div>
+  <button class="btn btn-outline" onclick="showScreen('home')">← กลับ</button>
+</div>
+
+<!-- ══════════ SCREEN: HOST LOBBY ══════════ -->
+<div id="host-lobby" class="screen">
+  <div style="text-align:center">
+    <div class="phase-tag">รอผู้เล่น</div>
+    <div style="font-size:1rem;color:#a0b4d6;margin-bottom:8px">แชร์ Room Code นี้ให้นักเรียน:</div>
+    <div class="room-code-big" id="room-code-display">------</div>
+  </div>
+  <div class="card" style="width:100%;max-width:500px">
+    <div style="font-weight:700;color:var(--gold-light);margin-bottom:12px">👥 ผู้เล่นในห้อง</div>
+    <div id="lobby-team-list"></div>
+    <div style="font-size:.8rem;color:#6080a0;margin-top:10px">คลิกชื่อทีมเพื่อแก้ไข</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px">
+      <button class="btn-outline btn" style="padding:6px;font-size:.8rem" onclick="setTeamName(0)">✏️ ทีม 1</button>
+      <button class="btn-outline btn" style="padding:6px;font-size:.8rem" onclick="setTeamName(1)">✏️ ทีม 2</button>
+      <button class="btn-outline btn" style="padding:6px;font-size:.8rem" onclick="setTeamName(2)">✏️ ทีม 3</button>
+      <button class="btn-outline btn" style="padding:6px;font-size:.8rem" onclick="setTeamName(3)">✏️ ทีม 4</button>
+    </div>
+  </div>
+  <button class="btn btn-gold" id="start-btn" onclick="startQuiz()" disabled>▶ เริ่มเกม!</button>
+  <div style="font-size:.8rem;color:#4060a0">20 คำถาม → ร้านค้า → สู้การ์ด</div>
+</div>
+
+<!-- ══════════ SCREEN: WAITING ══════════ -->
+<div id="waiting-screen" class="screen">
+  <div style="text-align:center">
+    <div class="phase-tag">รอเกมเริ่ม</div>
+    <div style="font-size:1.2rem;font-weight:700;color:var(--gold-light)">เข้าร่วมสำเร็จ! 🎉</div>
+    <div style="font-size:.9rem;color:#a0b4d6;margin-top:6px">Room: <strong id="waiting-code" style="color:var(--gold-light)"></strong></div>
+  </div>
+  <div class="card" style="width:100%;max-width:400px">
+    <div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">ผู้เล่นในห้อง:</div>
+    <div id="waiting-teams" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+  <div style="color:#a0b4d6;font-size:.9rem">⏳ รอครูเริ่มเกม...</div>
+</div>
+
+<!-- ══════════ SCREEN: QUIZ ══════════ -->
+<div id="quiz-screen" class="screen">
+  <div style="text-align:center">
+    <div class="phase-tag">Phase 1 — Quiz</div>
+  </div>
+  <div style="width:100%;max-width:600px">
+    <div style="display:flex;justify-content:space-between;font-size:.8rem;color:#a0b4d6;margin-bottom:6px">
+      <span id="q-counter">ข้อ 1/20</span>
+      <span id="q-turn-label"></span>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
+  </div>
+  <div class="quiz-box card">
+    <div class="current-team-banner" id="current-team-banner"></div>
+    <div class="question-text" id="question-text"></div>
+    <div class="answer-options" id="answer-options"></div>
+    <div id="answer-feedback" style="display:none;margin-top:12px;text-align:center;padding:10px;border-radius:10px;font-weight:700"></div>
+  </div>
+  <div id="reward-area" style="display:none;width:100%;max-width:600px">
+    <div class="card draw-reveal">
+      <div id="reward-title" style="font-size:.8rem;letter-spacing:2px;text-transform:uppercase;color:var(--gold)"></div>
+      <div id="drawn-card-display" style="display:none" class="drawn-card">
+        <div class="drawn-card-icon" id="dc-icon"></div>
+        <div class="drawn-card-name" id="dc-name"></div>
+        <div class="drawn-card-desc" id="dc-desc"></div>
+      </div>
+      <div id="reward-gold" style="font-size:1rem;font-weight:700;color:var(--gold-light);margin-top:4px"></div>
+      <button id="next-q-btn" class="btn btn-gold" style="margin-top:12px" onclick="nextQuestion()">ถัดไป →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: SHOP ══════════ -->
+<div id="shop-screen" class="screen">
+  <div style="text-align:center">
+    <div class="phase-tag">Phase 2 — Shop</div>
+    <div style="font-size:1.3rem;font-weight:700;color:var(--gold-light)" id="shop-phase-title">ร้านการ์ด</div>
+  </div>
+  <div class="card" style="width:100%;max-width:580px">
+    <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.85rem">
+      🃏 การ์ดที่จั่วได้: <span style="color:var(--gold-light);font-weight:700" id="shop-drawn-cards"></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(201,162,39,.1);border:1px solid rgba(201,162,39,.3);border-radius:10px;padding:10px 14px;margin-bottom:12px">
+      <span>💰 ทองสำหรับซื้อการ์ดพิเศษ</span>
+      <span style="font-size:1.2rem;font-weight:700;color:var(--gold-light)" id="shop-gold-amt">0</span>
+    </div>
+    <div class="shop-grid" id="shop-grid"></div>
+    <div id="shop-waiting" style="text-align:center;color:#a0b4d6;font-size:.85rem;margin-top:10px;display:none"></div>
+    <button id="shop-next-btn" class="btn btn-gold" style="margin-top:14px;width:100%;display:none" onclick="shopNext()">ทีมถัดไป →</button>
+  </div>
+</div>
+
+<!-- ══════════ SCREEN: BATTLE ══════════ -->
+<div id="battle-screen" class="screen">
+  <div style="text-align:center">
+    <div class="phase-tag">Phase 3 — Battle</div>
+    <div style="font-size:1.2rem;font-weight:700;color:var(--gold-light)" id="battle-turn-label"></div>
+  </div>
+  <div class="card" style="width:100%;max-width:680px">
+    <div id="battle-teams-display"></div>
+    <div class="battle-log" id="battle-log"></div>
+    <div class="hand-area">
+      <div class="hand-label">🃏 การ์ดในมือ</div>
+      <div class="hand-cards" id="hand-cards"></div>
+      <div class="target-select" id="target-select"></div>
+    </div>
+  </div>
+  <button id="end-turn-btn" class="btn btn-outline" onclick="endTurn()">➡ ผ่านเทิร์น</button>
+</div>
+
+<!-- ══════════ SCREEN: RESULT ══════════ -->
+<div id="result-screen" class="screen">
+  <div class="trophy">🏆</div>
+  <div class="winner-text" id="winner-text"></div>
+  <div class="card" id="final-scoreboard" style="width:100%;max-width:500px"></div>
+  <button id="play-again-btn" class="btn btn-gold" onclick="playAgain()" style="display:none">🔄 เล่นใหม่</button>
+  <button class="btn btn-outline" onclick="showScreen('home')">🏠 หน้าหลัก</button>
+</div>
+
+<script>
+// Stars animation
+const canvas = document.getElementById('stars-canvas');
+const ctx = canvas.getContext('2d');
+let stars = [];
+function resizeCanvas(){ canvas.width=innerWidth; canvas.height=innerHeight; }
+resizeCanvas(); window.addEventListener('resize',resizeCanvas);
+for(let i=0;i<120;i++) stars.push({x:Math.random(),y:Math.random(),r:Math.random()*1.5+.3,o:Math.random(),d:Math.random()*.01+.003});
+function drawStars(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  stars.forEach(s=>{
+    s.o+=s.d; if(s.o>1||s.o<0)s.d*=-1;
+    ctx.beginPath(); ctx.arc(s.x*canvas.width,s.y*canvas.height,s.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,230,100,${s.o*.7})`; ctx.fill();
+  });
+  requestAnimationFrame(drawStars);
+}
+drawStars();
+
+// expose showScreen globally (used in HTML onclick)
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+window.showScreen = showScreen;
+</script>
+</body>
+</html>
