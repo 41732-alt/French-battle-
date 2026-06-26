@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Français Battle 🗼</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, update, onValue, serverTimestamp }
@@ -215,7 +216,7 @@ async function hostGame(){
   const code=genCode();roomCode=code;myRole='host';
   const teams=Array.from({length:4},(_,i)=>({
     name:`ทีม ${i+1}`,players:[],color:TEAM_COLORS[i],
-    hp:MAX_HP,gold:0,cards:[],shield:false,eliminated:false
+    hp:MAX_HP,gold:0,cards:[],shield:false,eliminated:false,kicked:false
   }));
   await set(roomRef(code),{
     phase:'lobby',currentQ:0,selectedCat:null,selectedLevel:null,
@@ -223,10 +224,33 @@ async function hostGame(){
     teams,log:'รอผู้เล่น...',winner:null,createdAt:serverTimestamp()
   });
   $('room-code-display').textContent=code;
+  generateQR(code);
   showScreen('host-lobby');
   listenRoom(code);
 }
 window.hostGame=hostGame;
+
+function generateQR(code){
+  const url=location.origin+location.pathname+'?join='+code;
+  const qrDiv=$('qr-code');
+  if(!qrDiv)return;
+  qrDiv.innerHTML='';
+  try{new QRCode(qrDiv,{text:url,width:130,height:130,colorDark:'#0d1b4b',colorLight:'#f0d060'});}catch(e){}
+  const u=$('qr-url');if(u)u.textContent=url;
+}
+window.kickPlayer=async function(teamIdx){
+  if(!confirm('เตะทีม '+(teamIdx+1)+' ออก?'))return;
+  const team={...lastG.teams[teamIdx],players:[],kicked:true,name:'ทีม '+(teamIdx+1)};
+  await update(ref(db,'rooms/'+roomCode+'/teams/'+teamIdx),team);
+  toast('✅ เตะออกแล้ว');
+};
+// Auto join from URL
+window.addEventListener('load',()=>{
+  const p=new URLSearchParams(location.search);
+  const code=p.get('join');
+  if(code){showScreen('join-room');const el=$('join-code');if(el)el.value=code.toUpperCase();}
+});
+
 
 async function setTeamName(idx){
   const name=prompt(`ชื่อทีม ${idx+1}:`);
@@ -282,6 +306,10 @@ function listenRoom(code){
 }
 
 function syncUI(g){
+  if(myRole==='player'&&myTeamIdx!==null){
+    const mt=g.teams[myTeamIdx];
+    if(mt&&mt.kicked&&(mt.players||[]).length===0){showScreen('kicked-screen');return;}
+  }
   if(g.phase==='lobby'){renderHostLobby(g);if(myRole==='player')renderWaiting(g);return;}
   if(g.phase==='cat_select'){showScreen('cat-select-screen');renderCatSelect(g);return;}
   if(g.phase==='quiz'){showScreen('quiz-screen');renderQuiz(g);return;}
@@ -299,7 +327,10 @@ function renderHostLobby(g){
     return `<div class="lobby-team-row" style="border-left:3px solid ${t.color}">
       <span style="color:${t.color};font-weight:700">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}</span>
       <span>${p.length>0?p.join(' & '):'<span style="color:#666">รอผู้เล่น...</span>'}</span>
-      <span style="font-size:.8rem;color:#a0b4d6">${p.length}/2</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:.8rem;color:#a0b4d6">${p.length}/2</span>
+        ${myRole==='host'&&p.length>0?`<button class="kick-btn" onclick="kickPlayer(${i})">⚡ เตะ</button>`:''}
+      </div>
     </div>`;}).join('');
   $('start-btn').disabled=g.teams.reduce((s,t)=>s+(t.players||[]).length,0)<1;
 }
@@ -506,7 +537,7 @@ function renderQuizResult(g,q){
     return `<div class="result-team-row" style="border-left:3px solid ${t.color}">
       <span style="color:${t.color};font-weight:700">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}</span>
       <span>${!answered?'⏰ ไม่ได้ตอบ':correct?`✅ +${rew?.card?.icon||''}${rew?.card?.name||'การ์ด'}`:`❌ ผิด (${q.opts[ans]})`}</span>
-      <span style="color:var(--gold-light)">💰${t.gold||0}</span>
+      <span style="color:var(--gold-light)">💰${rew?.gold||0} (รวม ${t.gold||0})</span>
     </div>`;}).join('');
   $('host-next-btn').style.display=myRole==='host'?'inline-block':'none';
   $('waiting-next-msg').style.display=myRole!=='host'?'block':'none';
@@ -572,11 +603,11 @@ function renderBattle(g){
   $('battle-teams-display').innerHTML=
     `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">`+
     g.teams.map((t,i)=>`
-      <div class="battle-team" style="border:2px solid ${i===tIdx?t.color:'rgba(255,255,255,.1)'}">
+      <div class="battle-team" id="bteam-${i}" style="border:2px solid ${i===tIdx?t.color:'rgba(255,255,255,.1)'}">
         <div class="battle-team-name" style="color:${t.color}">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${t.hp<=0?' 💀':''}</div>
         <div style="font-size:.75rem;color:#a0b4d6">${(t.players||[]).join(' & ')}</div>
         <div class="hp-bar-wrap"><div class="hp-bar" style="width:${Math.max(0,(t.hp/MAX_HP)*100)}%;background:${t.hp>5?'#27ae60':t.hp>2?'#f39c12':'#e74c3c'}"></div></div>
-        <div class="hp-text">❤️ ${Math.max(0,t.hp||0)}/${MAX_HP}</div>
+        <div class="hp-text">❤️ <span id="hpnum-${i}">${Math.max(0,t.hp||0)}</span>/${MAX_HP}</div>
         <div style="font-size:.75rem;color:#a0b4d6">🃏 ${(t.cards||[]).length} ใบ</div>
       </div>`).join('')+'</div>';
   $('battle-log').textContent=g.log||'...';
@@ -618,10 +649,10 @@ async function applyCard(card,cardIdx,aIdx,tIdx,g){
   const teams=g.teams.map(t=>({...t,cards:[...(t.cards||[])],players:[...(t.players||[])]}));
   const att=teams[aIdx],tgt=teams[tIdx];let log='';
   att.cards.splice(cardIdx,1);
-  if(card.type==='attack'){const dmg=card.dmg||2;if(tgt.shield){tgt.shield=false;log=`⚔️ ${att.name} โจมตี ${tgt.name} แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-dmg);log=`⚔️ ${att.name} โจมตี ${tgt.name} -${dmg}HP! (เหลือ ${tgt.hp})`;if(tgt.hp<=0){tgt.eliminated=true;log+=` 💀 ${tgt.name} แพ้!`;}}}
+  if(card.type==='attack'){const dmg=card.dmg||2;if(tgt.shield){tgt.shield=false;log=`⚔️ ${att.name} โจมตี ${tgt.name} แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-dmg);log=`⚔️ ${att.name} โจมตี ${tgt.name} -${dmg}HP! (เหลือ ${tgt.hp})`;setTimeout(()=>flashAttack(targetIdx,dmg),100);if(tgt.hp<=0){tgt.eliminated=true;log+=` 💀 ${tgt.name} แพ้!`;}}}
   else if(card.type==='defend'){att.shield=true;log=`🛡️ ${att.name} ตั้งรับ!`;}
   else if(card.type==='heal'){att.hp=Math.min(MAX_HP,(att.hp||0)+1);log=`💚 ${att.name} ฟื้น 1 HP! (${att.hp} HP)`;}
-  else if(card.type==='steal'){if(tgt.shield){tgt.shield=false;log=`💜 ${att.name} ขโมย HP แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-1);att.hp=Math.min(MAX_HP,(att.hp||0)+1);if(tgt.hp<=0)tgt.eliminated=true;log=`💜 ${att.name} ขโมย 1 HP จาก ${tgt.name}!`;}}
+  else if(card.type==='steal'){if(tgt.shield){tgt.shield=false;log=`💜 ${att.name} ขโมย HP แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-1);att.hp=Math.min(MAX_HP,(att.hp||0)+1);if(tgt.hp<=0)tgt.eliminated=true;log=`💜 ${att.name} ขโมย 1 HP จาก ${tgt.name}!`;setTimeout(()=>flashAttack(targetIdx,1),100);}}}
   const alive=teams.filter(t=>!t.eliminated&&t.hp>0);
   let nt=(g.battleTurn||0)+1,nti=nt%4,s=0;
   while((teams[nti].hp<=0||teams[nti].eliminated)&&s<8){nt++;nti=nt%4;s++;}
@@ -684,7 +715,7 @@ function renderResult(g){
   $('play-again-btn').style.display=myRole==='host'?'inline-block':'none';
 }
 window.playAgain=async function(){
-  const teams=(lastG?.teams||[]).map(t=>({...t,hp:MAX_HP,gold:0,cards:[],shield:false,eliminated:false}));
+  const teams=(lastG?.teams||[]).map(t=>({...t,hp:MAX_HP,gold:0,cards:[],shield:false,eliminated:false,kicked:false}));
   await update(roomRef(roomCode),{phase:'lobby',currentQ:0,answers:{},battleTurn:0,battleTurnTeam:0,winner:null,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
 };
 </script>
@@ -823,6 +854,14 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 .score-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;margin-bottom:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);}
 .score-hp{font-weight:700;color:var(--gold-light);}
 
+
+.kick-btn{padding:4px 10px;border:1px solid #e74c3c;background:rgba(231,76,60,.15);color:#ff8e86;border-radius:6px;cursor:pointer;font-family:'Sarabun',sans-serif;font-size:.78rem;font-weight:700;}
+.kick-btn:hover{background:rgba(231,76,60,.35);}
+#qr-code{display:inline-block;padding:8px;background:var(--gold-light);border-radius:10px;margin:8px auto;}
+#qr-url{font-size:.65rem;color:#a0b4d6;word-break:break-all;max-width:260px;margin:0 auto;}
+@keyframes flashDmg{0%{background:rgba(231,76,60,.7);transform:scale(1.05);}50%{background:rgba(231,76,60,.4);}100%{background:rgba(255,255,255,.06);transform:scale(1);}}
+.flash-damage{animation:flashDmg .8s ease-out;}
+
 #toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);background:rgba(10,20,50,.95);border:1px solid var(--gold);border-radius:10px;padding:10px 22px;color:#fff;font-weight:700;z-index:999;transition:transform .3s;text-align:center;}
 #toast.show{transform:translateX(-50%) translateY(0);}
 #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:800;align-items:center;justify-content:center;flex-direction:column;gap:12px;backdrop-filter:blur(4px);}
@@ -900,6 +939,10 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     <div class="phase-tag">รอผู้เล่น</div>
     <div style="font-size:1rem;color:#a0b4d6;margin-bottom:8px">Room Code:</div>
     <div class="room-code-big" id="room-code-display">------</div>
+    <div style="text-align:center;margin-top:8px">
+      <div id="qr-code"></div>
+      <div id="qr-url"></div>
+    </div>
   </div>
   <div class="card" style="width:100%;max-width:500px">
     <div style="font-weight:700;color:var(--gold-light);margin-bottom:12px">👥 ผู้เล่นในห้อง</div>
@@ -972,7 +1015,7 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
   </div>
   <div id="quiz-result-area" style="display:none;width:100%;max-width:640px">
     <div class="card">
-      <div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">📊 ผลข้อนี้</div>
+      <div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">📊 ผลข้อนี้ — ตอบถูก +3💰 ตอบผิด +1💰</div>
       <div id="quiz-result-teams"></div>
       <button id="host-next-btn" class="btn btn-gold" style="margin-top:14px;width:100%;display:none" onclick="hostNextQuestion()">ข้อถัดไป →</button>
       <div id="waiting-next-msg" style="display:none;text-align:center;color:#a0b4d6;margin-top:10px;font-size:.9rem">⏳ รอครูกด "ข้อถัดไป"...</div>
@@ -1016,6 +1059,14 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     </div>
   </div>
   <button id="end-turn-btn" class="btn btn-outline" onclick="endTurn()" style="display:none">➡ ผ่านเทิร์น</button>
+</div>
+
+
+<!-- KICKED -->
+<div id="kicked-screen" class="screen">
+  <div style="font-size:4rem">⚡</div>
+  <div style="font-size:1.5rem;font-weight:700;color:#ff8e86;margin-bottom:16px">คุณถูกเตะออกจากห้อง</div>
+  <button class="btn btn-outline" onclick="showScreen('home')">🏠 กลับหน้าหลัก</button>
 </div>
 
 <!-- RESULT -->
