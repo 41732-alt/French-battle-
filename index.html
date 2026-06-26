@@ -314,7 +314,18 @@ function syncUI(g){
   if(g.phase==='cat_select'){showScreen('cat-select-screen');renderCatSelect(g);return;}
   if(g.phase==='quiz'){showScreen('quiz-screen');renderQuiz(g);return;}
   if(g.phase==='shop'){showScreen('shop-screen');renderShop(g);return;}
-  if(g.phase==='battle'){showScreen('battle-screen');renderBattle(g);return;}
+  if(g.phase==='battle'){
+    showScreen('battle-screen');
+    // init timer only on choose phase
+    if(g.battlePhase==='choose'&&g.battleStartTime&&!timerStarted){
+      timerStarted=true;
+      startCountdown(g.battleStartTime,BATTLE_CHOOSE_TIME,()=>{
+        if(myRole==='host'&&lastG&&lastG.battlePhase==='choose')resolveBattle();
+      });
+    }
+    if(g.battlePhase==='resolving')clearTimer();
+    renderBattle(g);return;
+  }
   if(g.phase==='result'){showScreen('result-screen');renderResult(g);return;}
 }
 
@@ -592,86 +603,263 @@ window.shopNext=async function(){
 };
 
 // ════════════════════════════════════════════
-//  BATTLE
+//  BATTLE — Pokemon Style (ทุกทีมเลือกพร้อมกัน)
 // ════════════════════════════════════════════
+const BATTLE_CHOOSE_TIME = 30;
+
 function renderBattle(g){
-  const tIdx=g.battleTurnTeam??0;
-  const alive=g.teams.filter(t=>!t.eliminated&&t.hp>0);
+  const alive=g.teams.filter(t=>!t.eliminated&&(t.hp||0)>0);
   if(alive.length<=1){if(myRole==='host')triggerResult(g);return;}
-  const team=g.teams[tIdx],isMyTurn=myRole==='host'||myTeamIdx===tIdx;
-  $('battle-turn-label').textContent=`⚔️ เทิร์นของ ${team.name||'ทีม '+(tIdx+1)}`;
+
+  const choices=g.battleChoices||{};
+  const myKey=myTeamIdx!==null?`team${myTeamIdx}`:null;
+  const iChose=myKey&&choices[myKey]!==undefined;
+  const chosenCount=Object.keys(choices).filter(k=>{
+    const idx=parseInt(k.replace('team',''));
+    return (g.teams[idx]?.hp||0)>0&&!g.teams[idx]?.eliminated;
+  }).length;
+  const aliveCount=alive.length;
+
+  // header
+  $('battle-turn-label').textContent=`⚔️ รอบที่ ${(g.battleRound||0)+1} — เลือกสกิลพร้อมกัน!`;
+  $('battle-chosen-count').textContent=`✅ เลือกแล้ว ${chosenCount}/${aliveCount} ทีม`;
+
+  // teams grid
   $('battle-teams-display').innerHTML=
     `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">`+
-    g.teams.map((t,i)=>`
-      <div class="battle-team" id="bteam-${i}" style="border:2px solid ${i===tIdx?t.color:'rgba(255,255,255,.1)'}">
-        <div class="battle-team-name" style="color:${t.color}">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${t.hp<=0?' 💀':''}</div>
+    g.teams.map((t,i)=>{
+      const dead=(t.hp||0)<=0;
+      const chose=choices[`team${i}`]!==undefined;
+      return `<div class="battle-team" id="bteam-${i}" style="border:2px solid ${dead?'rgba(255,255,255,.1)':t.color};${dead?'opacity:.35':''}">
+        <div class="battle-team-name" style="color:${t.color}">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${dead?' 💀':''}</div>
         <div style="font-size:.75rem;color:#a0b4d6">${(t.players||[]).join(' & ')}</div>
-        <div class="hp-bar-wrap"><div class="hp-bar" style="width:${Math.max(0,(t.hp/MAX_HP)*100)}%;background:${t.hp>5?'#27ae60':t.hp>2?'#f39c12':'#e74c3c'}"></div></div>
+        <div class="hp-bar-wrap"><div class="hp-bar" id="hpbar-${i}" style="width:${Math.max(0,((t.hp||0)/MAX_HP)*100)}%;background:${(t.hp||0)>5?'#27ae60':(t.hp||0)>2?'#f39c12':'#e74c3c'}"></div></div>
         <div class="hp-text">❤️ <span id="hpnum-${i}">${Math.max(0,t.hp||0)}</span>/${MAX_HP}</div>
-        <div style="font-size:.75rem;color:#a0b4d6">🃏 ${(t.cards||[]).length} ใบ</div>
-      </div>`).join('')+'</div>';
+        <div style="font-size:.75rem;margin-top:4px;color:${chose?'#7effc0':'#a0b4d6'}">
+          ${dead?'':(chose?'✅ เลือกแล้ว':'⏳ รอเลือก...')}
+        </div>
+      </div>`;
+    }).join('')+'</div>';
+
   $('battle-log').textContent=g.log||'...';
-  const handDiv=$('hand-cards');handDiv.innerHTML='';
+
+  // show resolve result if battlePhase=resolving
+  if(g.battlePhase==='resolving'){
+    clearTimer();
+    $('battle-choose-area').style.display='none';
+    $('battle-result-display').style.display='block';
+    renderBattleResolve(g);
+    return;
+  }
+
+  $('battle-result-display').style.display='none';
+  $('battle-choose-area').style.display='block';
+
+  // hand cards
+  const handDiv=$('hand-cards');
+  handDiv.innerHTML='';
   $('target-select').style.display='none';
-  $('end-turn-btn').style.display=isMyTurn?'inline-block':'none';
-  if(!isMyTurn){handDiv.innerHTML=`<div style="color:#a0b4d6;font-size:.85rem">⏳ รอ ${team.name||'ทีม '+(tIdx+1)} เล่น...</div>`;return;}
-  const cards=team.cards||[];
-  if(cards.length===0){handDiv.innerHTML='<div style="color:#a0b4d6;font-size:.85rem">ไม่มีการ์ด — กดผ่านเทิร์น</div>';return;}
+
+  const myTeamData=myTeamIdx!==null?g.teams[myTeamIdx]:null;
+  const isAlive=myTeamData&&(myTeamData.hp||0)>0&&!myTeamData.eliminated;
+
+  if(myRole==='host'){
+    $('host-resolve-btn').style.display='inline-block';
+    $('pass-btn').style.display='none';
+    handDiv.innerHTML='<div style="color:#a0b4d6;font-size:.85rem">👀 รอทุกทีมเลือกสกิล...</div>';
+    return;
+  }
+
+  $('host-resolve-btn').style.display='none';
+
+  if(!isAlive){
+    handDiv.innerHTML='<div style="color:#a0b4d6;font-size:.85rem">💀 ทีมคุณแพ้แล้ว</div>';
+    $('pass-btn').style.display='none';
+    return;
+  }
+
+  if(iChose){
+    handDiv.innerHTML='<div style="color:#7effc0;font-size:.95rem;font-weight:700">✅ เลือกสกิลแล้ว รอทีมอื่น...</div>';
+    $('pass-btn').style.display='none';
+    return;
+  }
+
+  $('pass-btn').style.display='inline-block';
+
+  const cards=(myTeamData?.cards)||[];
+  if(cards.length===0){
+    handDiv.innerHTML='<div style="color:#a0b4d6;font-size:.85rem">ไม่มีการ์ด — กดผ่านเทิร์น</div>';
+    return;
+  }
   cards.forEach((card,i)=>{
     const full=SKILL_CARDS.find(s=>s.id===card.id)||card;
     const btn=document.createElement('button');
     btn.className=`hand-card ${card.type}`;
     btn.innerHTML=`<span class="hand-svg">${full.svg||card.icon}</span>${card.name}`;
-    btn.onclick=()=>selectBattleCard(card,i,tIdx,g);
+    btn.onclick=()=>chooseCard(card,i,g);
     handDiv.appendChild(btn);
   });
 }
 
-function selectBattleCard(card,cardIdx,teamIdx,g){
-  openBattleQuiz(ok=>{
-    if(!ok){toast('❌ ตอบผิด การ์ดถูกยกเลิก!');return;}
-    if(card.type==='defend'||card.type==='heal'){applyCard(card,cardIdx,teamIdx,teamIdx,g);}
-    else{showTargetSelect(card,cardIdx,teamIdx,g);}
-  });
+function chooseCard(card,cardIdx,g){
+  if(card.type==='defend'||card.type==='heal'){
+    submitBattleChoice({cardId:card.id,cardIdx,targetIdx:myTeamIdx});
+  }else{
+    showBattleTargetSelect(card,cardIdx,g);
+  }
 }
-function showTargetSelect(card,cardIdx,teamIdx,g){
+
+function showBattleTargetSelect(card,cardIdx,g){
   const ts=$('target-select');ts.style.display='flex';
   ts.innerHTML='<div style="width:100%;color:#a0b4d6;font-size:.85rem;text-align:center;margin-bottom:6px">🎯 เลือกเป้าหมาย:</div>';
   g.teams.forEach((t,i)=>{
-    if(i===teamIdx||t.hp<=0)return;
+    if(i===myTeamIdx||(t.hp||0)<=0)return;
     const btn=document.createElement('button');
-    btn.className='target-btn';btn.textContent=`${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)} ❤️${t.hp}`;
-    btn.onclick=()=>{ts.style.display='none';applyCard(card,cardIdx,teamIdx,i,g);};
+    btn.className='target-btn';
+    btn.textContent=`${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)} ❤️${t.hp}`;
+    btn.onclick=()=>{ts.style.display='none';submitBattleChoice({cardId:card.id,cardIdx,targetIdx:i});};
     ts.appendChild(btn);
   });
 }
-async function applyCard(card,cardIdx,aIdx,tIdx,g){
+
+async function submitBattleChoice(choice){
+  if(!roomCode||myTeamIdx===null)return;
+  const myKey=`team${myTeamIdx}`;
+  document.querySelectorAll('.hand-card').forEach(b=>b.disabled=true);
+  const u={};u[`rooms/${roomCode}/battleChoices/${myKey}`]=choice;
+  await update(ref(db),u);
+  toast('✅ เลือกสกิลแล้ว รอทีมอื่น...');
+}
+
+window.passBattleTurn=async function(){
+  if(!roomCode||myTeamIdx===null)return;
+  const myKey=`team${myTeamIdx}`;
+  const u={};u[`rooms/${roomCode}/battleChoices/${myKey}`]={cardId:null,cardIdx:-1,targetIdx:-1};
+  await update(ref(db),u);
+  toast('➡ ผ่านเทิร์น');
+};
+
+window.hostResolveBattle=async function(){ await resolveBattle(); };
+
+async function resolveBattle(){
+  if(!lastG||!roomCode)return;
+  const g=lastG;
   const teams=g.teams.map(t=>({...t,cards:[...(t.cards||[])],players:[...(t.players||[])]}));
-  const att=teams[aIdx],tgt=teams[tIdx];let log='';
-  att.cards.splice(cardIdx,1);
-  if(card.type==='attack'){const dmg=card.dmg||2;if(tgt.shield){tgt.shield=false;log=`⚔️ ${att.name} โจมตี ${tgt.name} แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-dmg);log=`⚔️ ${att.name} โจมตี ${tgt.name} -${dmg}HP! (เหลือ ${tgt.hp})`;setTimeout(()=>flashAttack(targetIdx,dmg),100);if(tgt.hp<=0){tgt.eliminated=true;log+=` 💀 ${tgt.name} แพ้!`;}}}
-  else if(card.type==='defend'){att.shield=true;log=`🛡️ ${att.name} ตั้งรับ!`;}
-  else if(card.type==='heal'){att.hp=Math.min(MAX_HP,(att.hp||0)+1);log=`💚 ${att.name} ฟื้น 1 HP! (${att.hp} HP)`;}
-  else if(card.type==='steal'){if(tgt.shield){tgt.shield=false;log=`💜 ${att.name} ขโมย HP แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-1);att.hp=Math.min(MAX_HP,(att.hp||0)+1);if(tgt.hp<=0)tgt.eliminated=true;log=`💜 ${att.name} ขโมย 1 HP จาก ${tgt.name}!`;setTimeout(()=>flashAttack(targetIdx,1),100);}}
-  const alive=teams.filter(t=>!t.eliminated&&t.hp>0);
-  let nt=(g.battleTurn||0)+1,nti=nt%4,s=0;
-  while((teams[nti].hp<=0||teams[nti].eliminated)&&s<8){nt++;nti=nt%4;s++;}
-  const u={};teams.forEach((t,i)=>{u[`rooms/${roomCode}/teams/${i}`]=t;});
-  u[`rooms/${roomCode}/log`]=log;u[`rooms/${roomCode}/battleTurn`]=nt;u[`rooms/${roomCode}/battleTurnTeam`]=nti;
-  if(alive.length<=1){u[`rooms/${roomCode}/phase`]='result';u[`rooms/${roomCode}/winner`]=alive.length===1?alive[0].name:findWinner(teams);}
+  const choices=g.battleChoices||{};
+  const logs=[];
+  const dmgTaken={};
+  const actions=[];
+
+  // collect valid actions
+  for(let i=0;i<4;i++){
+    const c=choices[`team${i}`];
+    if(!c||c.cardId===null||(teams[i].hp||0)<=0||teams[i].eliminated)continue;
+    const card=teams[i].cards[c.cardIdx];
+    if(!card||card.id!==c.cardId)continue;
+    actions.push({attackerIdx:i,card,cardIdx:c.cardIdx,targetIdx:c.targetIdx});
+  }
+
+  // remove used cards first (descending index to avoid shift)
+  const byAttacker={};
+  actions.forEach(a=>{
+    if(!byAttacker[a.attackerIdx])byAttacker[a.attackerIdx]=[];
+    byAttacker[a.attackerIdx].push(a.cardIdx);
+  });
+  Object.keys(byAttacker).forEach(idx=>{
+    [...byAttacker[idx]].sort((a,b)=>b-a).forEach(ci=>teams[idx].cards.splice(ci,1));
+  });
+
+  // apply defend/heal first, then attacks
+  const phaseOrder=['defend','heal','attack','steal'];
+  phaseOrder.forEach(phase=>{
+    actions.filter(a=>a.card.type===phase).forEach(a=>{
+      const att=teams[a.attackerIdx];
+      const tgtIdx=a.targetIdx>=0?a.targetIdx:a.attackerIdx;
+      const tgt=teams[tgtIdx];
+      if(phase==='defend'){att.shield=true;logs.push(`🛡️ ${att.name} ตั้งรับ!`);}
+      else if(phase==='heal'){att.hp=Math.min(MAX_HP,(att.hp||0)+1);logs.push(`💚 ${att.name} ฟื้น 1 HP! (${att.hp} HP)`);}
+      else if(phase==='attack'){
+        const dmg=a.card.dmg||2;
+        if(tgt.shield){tgt.shield=false;logs.push(`⚔️ ${att.name} โจมตี ${tgt.name} แต่โดนป้องกัน! 🛡️`);}
+        else{if(!dmgTaken[tgtIdx])dmgTaken[tgtIdx]=0;dmgTaken[tgtIdx]+=dmg;logs.push(`⚔️ ${att.name} โจมตี ${tgt.name} -${dmg}HP!`);}
+      }
+      else if(phase==='steal'){
+        if(tgt.shield){tgt.shield=false;logs.push(`💜 ${att.name} พยายามขโมย HP แต่โดนป้องกัน! 🛡️`);}
+        else{if(!dmgTaken[tgtIdx])dmgTaken[tgtIdx]=0;dmgTaken[tgtIdx]+=1;att.hp=Math.min(MAX_HP,(att.hp||0)+1);logs.push(`💜 ${att.name} ขโมย 1 HP จาก ${tgt.name}!`);}
+      }
+    });
+  });
+
+  // apply all damage at once
+  Object.keys(dmgTaken).forEach(idx=>{
+    teams[idx].hp=Math.max(0,(teams[idx].hp||0)-dmgTaken[idx]);
+    if(teams[idx].hp<=0){teams[idx].eliminated=true;logs.push(`💀 ${teams[idx].name} แพ้!`);}
+  });
+
+  if(logs.length===0)logs.push('— ไม่มีการกระทำในรอบนี้ —');
+
+  const alive=teams.filter(t=>!t.eliminated&&(t.hp||0)>0);
+  const u={};
+  teams.forEach((t,i)=>{u[`rooms/${roomCode}/teams/${i}`]=t;});
+  u[`rooms/${roomCode}/log`]=logs[logs.length-1];
+  u[`rooms/${roomCode}/battlePhase`]='resolving';
+  u[`rooms/${roomCode}/battleResolveLog`]=logs;
+  u[`rooms/${roomCode}/battleDmgTaken`]=dmgTaken;
+  if(alive.length<=1){
+    u[`rooms/${roomCode}/phase`]='result';
+    u[`rooms/${roomCode}/winner`]=alive.length===1?alive[0].name:findWinner(teams);
+  }
   await update(ref(db),u);
 }
+
+function renderBattleResolve(g){
+  const logs=g.battleResolveLog||[];
+  const dmg=g.battleDmgTaken||{};
+  $('battle-resolve-log').innerHTML=logs.map(l=>`<div style="margin-bottom:5px;padding:4px 8px;background:rgba(255,255,255,.05);border-radius:6px">${l}</div>`).join('');
+
+  // flash + animate HP for damaged teams
+  Object.keys(dmg).forEach(idx=>{
+    setTimeout(()=>{
+      const el=document.getElementById(`bteam-${idx}`);
+      if(el){el.classList.add('flash-damage');setTimeout(()=>el.classList.remove('flash-damage'),900);}
+      animateHP(parseInt(idx), (g.teams[parseInt(idx)].hp||0)+(dmg[idx]||0), g.teams[parseInt(idx)].hp||0);
+    },300);
+  });
+
+  $('next-round-btn').style.display=myRole==='host'?'inline-block':'none';
+  $('waiting-round-msg').style.display=myRole!=='host'?'block':'none';
+}
+
+function animateHP(idx,from,to){
+  const el=document.getElementById(`hpnum-${idx}`);
+  const bar=document.getElementById(`hpbar-${idx}`);
+  if(!el)return;
+  let cur=from;
+  const step=setInterval(()=>{
+    cur=Math.max(to,cur-1);
+    el.textContent=cur;
+    if(bar)bar.style.width=`${Math.max(0,(cur/MAX_HP)*100)}%`;
+    if(cur<=to)clearInterval(step);
+  },80);
+}
+
+window.nextBattleRound=async function(){
+  if(!lastG||!roomCode)return;
+  const alive=lastG.teams.filter(t=>!t.eliminated&&(t.hp||0)>0);
+  if(alive.length<=1){await triggerResult(lastG);return;}
+  await update(roomRef(roomCode),{
+    battleRound:(lastG.battleRound||0)+1,
+    battleChoices:{},battlePhase:'choose',
+    battleStartTime:Date.now(),
+    log:'รอบใหม่! เลือกสกิล...'
+  });
+};
+
 function findWinner(teams){return[...teams].sort((a,b)=>(b.hp||0)-(a.hp||0))[0].name||'ทีม 1';}
 async function triggerResult(g){
-  const alive=g.teams.filter(t=>!t.eliminated&&t.hp>0);
+  const alive=g.teams.filter(t=>!t.eliminated&&(t.hp||0)>0);
   await update(roomRef(roomCode),{phase:'result',winner:alive.length===1?alive[0].name:findWinner(g.teams)});
 }
-window.endTurn=async function(){
-  if(!lastG||!roomCode)return;
-  let nt=(lastG.battleTurn||0)+1,nti=nt%4,s=0;
-  while((lastG.teams[nti].hp<=0||lastG.teams[nti].eliminated)&&s<8){nt++;nti=nt%4;s++;}
-  await update(roomRef(roomCode),{battleTurn:nt,battleTurnTeam:nti,log:`${lastG.teams[nti].name||'ทีม '+(nti+1)} — เทิร์นใหม่`});
-};
 
 function openBattleQuiz(cb){
   // use selected category questions for battle quiz too
@@ -739,6 +927,8 @@ body{font-family:'Sarabun',sans-serif;background:var(--navy);min-height:100vh;ov
 .btn-gold:disabled{opacity:.4;cursor:not-allowed;transform:none;}
 .btn-outline{background:transparent;color:var(--gold-light);border:2px solid var(--gold);}
 .btn-outline:hover{background:rgba(201,162,39,.15);}
+.btn-red{background:linear-gradient(135deg,#c0392b,#e74c3c);color:#fff;border:none;}
+.btn-red:hover{transform:translateY(-2px);}
 input[type=text]{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px 14px;color:#fff;font-family:'Sarabun',sans-serif;font-size:1rem;width:100%;}
 input:focus{outline:none;border-color:var(--gold);}
 input::placeholder{color:rgba(255,255,255,.35);}
@@ -1047,18 +1237,43 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 <div id="battle-screen" class="screen">
   <div style="text-align:center">
     <div class="phase-tag">Phase 3 — Battle</div>
-    <div style="font-size:1.2rem;font-weight:700;color:var(--gold-light)" id="battle-turn-label"></div>
+    <div style="font-size:1rem;font-weight:700;color:var(--gold-light)" id="battle-turn-label"></div>
+    <div id="battle-chosen-count" style="font-size:.85rem;color:#a0b4d6;margin-top:4px"></div>
   </div>
+
+  <!-- Timer -->
+  <div style="text-align:center;width:100%;max-width:640px" id="battle-timer-wrap">
+    <div class="timer-big" id="timer-count">30</div>
+    <div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
+  </div>
+
   <div class="card" style="width:100%;max-width:680px">
     <div id="battle-teams-display"></div>
     <div class="battle-log" id="battle-log"></div>
-    <div class="hand-area">
-      <div class="hand-label">🃏 การ์ดในมือ</div>
-      <div class="hand-cards" id="hand-cards"></div>
-      <div class="target-select" id="target-select"></div>
+
+    <!-- Choose area -->
+    <div id="battle-choose-area">
+      <div class="hand-area">
+        <div class="hand-label">🃏 เลือกสกิลที่จะใช้รอบนี้</div>
+        <div class="hand-cards" id="hand-cards"></div>
+        <div class="target-select" id="target-select"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap">
+        <button id="pass-btn" class="btn btn-outline" onclick="passBattleTurn()" style="display:none">➡ ผ่านเทิร์น</button>
+        <button id="host-resolve-btn" class="btn btn-red" onclick="hostResolveBattle()" style="display:none">⚡ ประมวลผลเลย</button>
+      </div>
+    </div>
+
+    <!-- Resolve result -->
+    <div id="battle-result-display" style="display:none;margin-top:14px">
+      <div style="font-weight:700;color:var(--gold-light);margin-bottom:8px">💥 ผลของรอบนี้:</div>
+      <div id="battle-resolve-log" style="background:rgba(0,0,0,.3);border-radius:10px;padding:12px;font-size:.85rem;color:#c0d4f0;max-height:180px;overflow-y:auto"></div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:12px">
+        <button id="next-round-btn" class="btn btn-gold" onclick="nextBattleRound()" style="display:none">▶ รอบถัดไป</button>
+        <div id="waiting-round-msg" style="display:none;color:#a0b4d6;font-size:.9rem;align-self:center">⏳ รอครูกด "รอบถัดไป"...</div>
+      </div>
     </div>
   </div>
-  <button id="end-turn-btn" class="btn btn-outline" onclick="endTurn()" style="display:none">➡ ผ่านเทิร์น</button>
 </div>
 
 
