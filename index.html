@@ -306,6 +306,7 @@ function listenRoom(code){
 }
 
 function syncUI(g){
+  updateScoreboard(g);
   if(myRole==='player'&&myTeamIdx!==null){
     const mt=g.teams[myTeamIdx];
     if(mt&&mt.kicked&&(mt.players||[]).length===0){showScreen('kicked-screen');return;}
@@ -398,6 +399,12 @@ function renderCatSelect(g){
 
   // start button
   $('start-quiz-btn').style.display=isHost&&sel&&lv?'inline-block':'none';
+  // update qcount buttons
+  const qc=g.selectedQCount||20;
+  [10,15,20].forEach(n=>{
+    const btn=document.getElementById('qc'+n);
+    if(btn){btn.className='qcount-btn'+(qc===n?' qcount-selected':'');btn.disabled=!isHost;}
+  });
   $('cat-select-info').textContent=!isHost?'⏳ รอครูเลือกหมวดหมู่และระดับ...':(sel&&lv?`✅ พร้อมเล่น: ${QUESTION_BANK[sel].label} ระดับ${lv==='easy'?'ง่าย':'ยาก'}`:'');
 
   // show selection to all
@@ -430,12 +437,14 @@ async function startQuiz(){
   const cat=lastG.selectedCat, lv=lastG.selectedLevel;
   // shuffle questions
   const pool=[...QUESTION_BANK[cat][lv]].sort(()=>Math.random()-.5).slice(0,20);
+  showCountdown(async()=>{
   setLoading(true,'กำลังเริ่ม...');
   await update(roomRef(roomCode),{
     phase:'quiz',currentQ:0,quizPool:pool,
     answers:{},quizStartTime:Date.now(),quizShowResult:false,log:'เริ่มตอบ!'
   });
   setLoading(false);
+  }); // end countdown
 }
 window.startQuiz=startQuiz;
 
@@ -572,6 +581,7 @@ function renderShop(g){
   const sIdx=g.shopTeamIdx||0,team=g.teams[sIdx];
   const isMyTurn=myRole==='host'||myTeamIdx===sIdx;
   $('shop-phase-title').textContent=`${TEAM_EMOJIS[sIdx]} ${team.name||'ทีม '+(sIdx+1)} — ช้อปการ์ด`;
+  $('shop-card-limit').textContent=`🃏 การ์ดในมือ: ${(team.cards||[]).length}/${MAX_CARDS}`;
   $('shop-drawn-cards').innerHTML=(team.cards||[]).length>0?(team.cards||[]).map(c=>`<span>${c.icon}${c.name}</span>`).join(' '):'ยังไม่มี';
   $('shop-gold-amt').textContent=team.gold||0;
   $('shop-grid').innerHTML=SKILL_CARDS.map(sk=>`
@@ -592,7 +602,7 @@ window.buyCard=async function(skillId){
   const team={...lastG.teams[sIdx],cards:[...(lastG.teams[sIdx].cards||[])]};
   const sk=SKILL_CARDS.find(s=>s.id===skillId);
   if(!sk||(team.gold||0)<sk.cost){toast('❌ ทองไม่พอ!');return;}
-  team.gold-=sk.cost;team.cards.push({...sk});
+  if(team.cards.length>=MAX_CARDS){toast('❌ การ์ดเต็มแล้ว! (สูงสุด 5 ใบ)');return;}team.gold-=sk.cost;team.cards.push({...sk});
   await update(ref(db,`rooms/${roomCode}/teams/${sIdx}`),team);toast(`✅ ซื้อ ${sk.icon}${sk.name}!`);
 };
 window.shopNext=async function(){
@@ -817,17 +827,119 @@ function renderBattleResolve(g){
   const dmg=g.battleDmgTaken||{};
   $('battle-resolve-log').innerHTML=logs.map(l=>`<div style="margin-bottom:5px;padding:4px 8px;background:rgba(255,255,255,.05);border-radius:6px">${l}</div>`).join('');
 
-  // flash + animate HP for damaged teams
-  Object.keys(dmg).forEach(idx=>{
+  // play effects per action log
+  const actionLogs=logs;
+  let delay=200;
+  actionLogs.forEach(log=>{
     setTimeout(()=>{
-      const el=document.getElementById(`bteam-${idx}`);
-      if(el){el.classList.add('flash-damage');setTimeout(()=>el.classList.remove('flash-damage'),900);}
-      animateHP(parseInt(idx), (g.teams[parseInt(idx)].hp||0)+(dmg[idx]||0), g.teams[parseInt(idx)].hp||0);
-    },300);
+      if(log.includes('โจมตี')&&!log.includes('ป้องกัน')){
+        // find attacker and target indices from teams names
+        g.teams.forEach((_,ai)=>{
+          g.teams.forEach((_,ti)=>{
+            if(ai!==ti&&log.includes(g.teams[ai].name||'ทีม '+(ai+1))&&log.includes(g.teams[ti].name||'ทีม '+(ti+1))){
+              const dmgMatch=log.match(/-(\d+)HP/);
+              const d=dmgMatch?parseInt(dmgMatch[1]):2;
+              fxAttack(ai,ti,d);
+            }
+          });
+        });
+      } else if(log.includes('ตั้งรับ')){
+        g.teams.forEach((_,i)=>{if(log.includes(g.teams[i].name||'ทีม '+(i+1)))fxDefend(i);});
+      } else if(log.includes('ฟื้น')){
+        g.teams.forEach((_,i)=>{if(log.includes(g.teams[i].name||'ทีม '+(i+1)))fxHeal(i);});
+      } else if(log.includes('ขโมย')&&!log.includes('ป้องกัน')){
+        g.teams.forEach((_,ai)=>{
+          g.teams.forEach((_,ti)=>{
+            if(ai!==ti&&log.includes(g.teams[ai].name||'ทีม '+(ai+1))&&log.includes(g.teams[ti].name||'ทีม '+(ti+1))){
+              fxSteal(ai,ti);
+            }
+          });
+        });
+      } else if(log.includes('ป้องกัน')){
+        g.teams.forEach((_,i)=>{if(log.includes(g.teams[i].name||'ทีม '+(i+1)))fxBlocked(i);});
+      }
+    },delay);
+    delay+=600;
   });
 
   $('next-round-btn').style.display=myRole==='host'?'inline-block':'none';
   $('waiting-round-msg').style.display=myRole!=='host'?'block':'none';
+}
+
+
+// ── CARD EFFECT FUNCTIONS ─────────────────────────────────────
+function getTeamCardCenter(teamIdx){
+  const el=document.getElementById('bteam-'+teamIdx);
+  if(!el)return{x:window.innerWidth/2,y:window.innerHeight/2};
+  const r=el.getBoundingClientRect();
+  return{x:r.left+r.width/2,y:r.top+r.height/2};
+}
+function spawnFloat(x,y,text,color){
+  const div=document.createElement('div');
+  div.className='dmg-float';
+  div.style.cssText='left:'+(x-24)+'px;top:'+(y-20)+'px;font-size:2rem;color:'+color;
+  div.textContent=text;
+  document.body.appendChild(div);
+  setTimeout(()=>div.remove(),1300);
+}
+function spawnCardFly(fromEl,emoji){
+  if(!fromEl)return;
+  const r=fromEl.getBoundingClientRect();
+  const div=document.createElement('div');
+  div.className='card-fly';
+  div.style.cssText='left:'+(r.left+r.width/2-18)+'px;top:'+(r.top+r.height/2-18)+'px';
+  div.textContent=emoji;
+  document.body.appendChild(div);
+  setTimeout(()=>div.remove(),600);
+}
+function fxClass(el,cls){ if(!el)return; el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);setTimeout(()=>el.classList.remove(cls),800); }
+
+function fxAttack(attackerIdx,targetIdx,dmg){
+  SFX.attack();
+  const tEl=document.getElementById('bteam-'+targetIdx);
+  const aEl=document.getElementById('bteam-'+attackerIdx);
+  fxClass(tEl,'fx-attack');
+  spawnCardFly(aEl,'⚔️');
+  const c=getTeamCardCenter(targetIdx);
+  spawnFloat(c.x,c.y,'-'+dmg+'HP','#ff6b6b');
+}
+function fxDefend(teamIdx){
+  SFX.defend();
+  const el=document.getElementById('bteam-'+teamIdx);
+  fxClass(el,'fx-defend');
+  fxClass(el,'fx-shield-pop');
+  const c=getTeamCardCenter(teamIdx);
+  spawnFloat(c.x,c.y,'🛡️','#82cfff');
+}
+function fxHeal(teamIdx){
+  SFX.heal();
+  const el=document.getElementById('bteam-'+teamIdx);
+  fxClass(el,'fx-heal');
+  fxClass(el,'fx-heal-pop');
+  const c=getTeamCardCenter(teamIdx);
+  spawnFloat(c.x,c.y,'+1❤️','#7effc0');
+}
+function fxSteal(attackerIdx,targetIdx){
+  SFX.steal();
+  const tEl=document.getElementById('bteam-'+targetIdx);
+  const aEl=document.getElementById('bteam-'+attackerIdx);
+  fxClass(tEl,'fx-steal');
+  fxClass(aEl,'fx-heal-pop');
+  spawnCardFly(aEl,'💜');
+  const ct=getTeamCardCenter(targetIdx);
+  const ca=getTeamCardCenter(attackerIdx);
+  spawnFloat(ct.x,ct.y,'-1HP','#c39bd3');
+  spawnFloat(ca.x,ca.y,'+1❤️','#9b59b6');
+}
+function fxBlocked(targetIdx){
+  SFX.blocked();
+  const el=document.getElementById('bteam-'+targetIdx);
+  fxClass(el,'fx-defend');
+  const c=getTeamCardCenter(targetIdx);
+  spawnFloat(c.x,c.y,'BLOCKED!','#82cfff');
+}
+function flashAttack(teamIdx,dmg){
+  fxAttack(-1,teamIdx,dmg);
 }
 
 function animateHP(idx,from,to){
@@ -890,15 +1002,32 @@ function openBattleQuiz(cb){
 //  RESULT
 // ════════════════════════════════════════════
 function renderResult(g){
+  SFX.win();
   $('winner-text').textContent=`🎉 ${g.winner} ชนะ!`;
   const sorted=[...g.teams].sort((a,b)=>(b.hp||0)-(a.hp||0));
+
+  // MVP = most quiz correct answers
+  const mvp=[...g.teams].sort((a,b)=>(b.quizScore||0)-(a.quizScore||0))[0];
+  const mvpHTML=mvp?(
+    `<div style="text-align:center;padding:10px;background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.4);border-radius:12px;margin-bottom:12px">
+      <div style="font-size:.75rem;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">⭐ MVP — ตอบถูกมากที่สุด</div>
+      <div style="font-weight:700;color:${mvp.color};font-size:1.1rem">${mvp.name||'ทีม '} — ${mvp.quizScore||0} ข้อถูก</div>
+    </div>`
+  ):'';
+
   $('final-scoreboard').innerHTML=
-    '<div style="margin-bottom:12px;font-weight:700;color:var(--gold-light)">📊 ผลการแข่งขัน</div>'+
+    mvpHTML+
+    '<div style="margin-bottom:10px;font-weight:700;color:var(--gold-light)">📊 ผลการแข่งขัน</div>'+
     sorted.map((t,rank)=>`
       <div class="score-row">
-        <div><span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][rank]} ${t.name||'ทีม '}</span>
-        <span style="font-size:.8rem;color:#a0b4d6;margin-left:8px">${(t.players||[]).join(' & ')}</span></div>
-        <div class="score-hp">${(t.hp||0)<=0?'💀':`❤️ ${t.hp}`}</div>
+        <div>
+          <span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][rank]} ${t.name||'ทีม '}</span>
+          <span style="font-size:.78rem;color:#a0b4d6;margin-left:6px">${(t.players||[]).join(' & ')}</span>
+        </div>
+        <div style="text-align:right">
+          <div class="score-hp">${(t.hp||0)<=0?'💀':`❤️ ${t.hp}`}</div>
+          <div style="font-size:.75rem;color:#a0b4d6">✅ ${t.quizScore||0} ข้อ · 💰 ${t.gold||0}</div>
+        </div>
       </div>`).join('');
   $('play-again-btn').style.display=myRole==='host'?'inline-block':'none';
 }
@@ -1052,6 +1181,79 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 @keyframes flashDmg{0%{background:rgba(231,76,60,.7);transform:scale(1.05);}50%{background:rgba(231,76,60,.4);}100%{background:rgba(255,255,255,.06);transform:scale(1);}}
 .flash-damage{animation:flashDmg .8s ease-out;}
 
+
+/* ═══ CARD EFFECTS ═══ */
+/* Flash overlay on team card */
+@keyframes flashRed   {0%{box-shadow:0 0 0 4px #e74c3c,inset 0 0 30px rgba(231,76,60,.7)}50%{box-shadow:0 0 0 8px #e74c3c,inset 0 0 50px rgba(231,76,60,.9)}100%{box-shadow:none}}
+@keyframes flashBlue  {0%{box-shadow:0 0 0 4px #3498db,inset 0 0 30px rgba(52,152,219,.7)}50%{box-shadow:0 0 0 8px #3498db,inset 0 0 50px rgba(52,152,219,.9)}100%{box-shadow:none}}
+@keyframes flashGreen {0%{box-shadow:0 0 0 4px #27ae60,inset 0 0 30px rgba(39,174,96,.7)} 50%{box-shadow:0 0 0 8px #27ae60,inset 0 0 50px rgba(39,174,96,.9)} 100%{box-shadow:none}}
+@keyframes flashPurple{0%{box-shadow:0 0 0 4px #9b59b6,inset 0 0 30px rgba(155,89,182,.7)}50%{box-shadow:0 0 0 8px #9b59b6,inset 0 0 50px rgba(155,89,182,.9)}100%{box-shadow:none}}
+.fx-attack {animation:flashRed    .7s ease-out;}
+.fx-defend {animation:flashBlue   .7s ease-out;}
+.fx-heal   {animation:flashGreen  .7s ease-out;}
+.fx-steal  {animation:flashPurple .7s ease-out;}
+.flash-damage{animation:flashDmg .8s ease-out;}
+
+/* Floating number */
+.dmg-float{
+  position:fixed;font-family:'Playfair Display',serif;font-weight:900;
+  pointer-events:none;z-index:9999;text-shadow:0 2px 8px rgba(0,0,0,.8);
+  animation:floatUp 1.2s ease-out forwards;
+}
+@keyframes floatUp{
+  0%  {transform:translateY(0)   scale(1.4);opacity:1}
+  60% {transform:translateY(-60px) scale(1.1);opacity:1}
+  100%{transform:translateY(-110px) scale(.8);opacity:0}
+}
+
+/* Card fly animation */
+.card-fly{
+  position:fixed;pointer-events:none;z-index:9998;
+  font-size:2.2rem;
+  animation:cardFly .55s cubic-bezier(.25,.46,.45,.94) forwards;
+}
+@keyframes cardFly{
+  0%  {transform:scale(1.3) rotate(-5deg);opacity:1}
+  40% {transform:scale(1.5) rotate(5deg) translateY(-20px);opacity:1}
+  100%{transform:scale(.3) rotate(15deg) translateY(-80px);opacity:0}
+}
+
+/* Shield pulse */
+@keyframes shieldPulse{
+  0%  {box-shadow:0 0 0 0 rgba(52,152,219,.8)}
+  70% {box-shadow:0 0 0 16px rgba(52,152,219,0)}
+  100%{box-shadow:0 0 0 0 rgba(52,152,219,0)}
+}
+.fx-shield-pop{animation:shieldPulse .6s ease-out;}
+
+/* Heal sparkle */
+@keyframes healGlow{
+  0%  {box-shadow:0 0 0 0 rgba(39,174,96,.9)}
+  60% {box-shadow:0 0 0 20px rgba(39,174,96,0)}
+  100%{box-shadow:none}
+}
+.fx-heal-pop{animation:healGlow .7s ease-out;}
+
+
+/* Live Scoreboard */
+#live-scoreboard{
+  position:fixed;top:12px;right:12px;z-index:400;
+  background:rgba(10,20,50,.92);border:1px solid rgba(201,162,39,.4);
+  border-radius:12px;padding:10px 14px;min-width:160px;
+  backdrop-filter:blur(8px);display:none;
+}
+#live-scoreboard.show{display:block;}
+.sb-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:.8rem;}
+.sb-name{font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sb-stats{color:#a0b4d6;font-size:.75rem;}
+
+
+.qcount-btn{padding:8px 20px;border:2px solid rgba(255,255,255,.2);border-radius:20px;
+  background:rgba(255,255,255,.06);color:#fff;font-family:'Sarabun',sans-serif;
+  font-size:.9rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.qcount-btn:hover{border-color:var(--gold);}
+.qcount-selected{border-color:var(--gold)!important;background:rgba(201,162,39,.2)!important;color:var(--gold-light)!important;}
+
 #toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);background:rgba(10,20,50,.95);border:1px solid var(--gold);border-radius:10px;padding:10px 22px;color:#fff;font-weight:700;z-index:999;transition:transform .3s;text-align:center;}
 #toast.show{transform:translateX(-50%) translateY(0);}
 #loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:800;align-items:center;justify-content:center;flex-direction:column;gap:12px;backdrop-filter:blur(4px);}
@@ -1068,6 +1270,12 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
   <rect x="95" y="5" width="10" height="18" fill="white"/>
 </svg>
 <div id="toast"></div>
+
+<div id="live-scoreboard">
+  <div style="font-size:.7rem;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">📊 คะแนน</div>
+  <div id="sb-rows"></div>
+</div>
+
 <div id="loading-overlay"><div class="spinner"></div><div id="loading-msg" style="color:var(--gold-light);font-weight:700">กำลังโหลด...</div></div>
 
 <!-- BATTLE QUIZ -->
@@ -1179,6 +1387,16 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     <button id="btn-easy" class="level-btn easy-btn">🟢 ระดับง่าย (ถามเป็นภาษาไทย)</button>
     <button id="btn-hard" class="level-btn hard-btn">🔴 ระดับยาก (ถามเป็นภาษาฝรั่งเศส)</button>
   </div>
+
+  <!-- Q Count selector -->
+  <div id="qcount-select" style="width:100%;max-width:500px;text-align:center">
+    <div style="font-size:.85rem;color:#a0b4d6;margin-bottom:10px">🔢 จำนวนคำถาม</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button id="qc10" class="qcount-btn" onclick="selectQCount(10)">10 ข้อ</button>
+      <button id="qc15" class="qcount-btn" onclick="selectQCount(15)">15 ข้อ</button>
+      <button id="qc20" class="qcount-btn qcount-selected" onclick="selectQCount(20)">20 ข้อ</button>
+    </div>
+  </div>
   <div id="selected-display" style="display:none;width:100%;max-width:500px"></div>
   <div id="cat-select-info" style="font-size:.9rem;color:#a0b4d6;text-align:center"></div>
   <button id="start-quiz-btn" class="btn btn-gold" style="display:none" onclick="startQuiz()">▶ เริ่มเกม!</button>
@@ -1220,8 +1438,9 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     <div style="font-size:1.3rem;font-weight:700;color:var(--gold-light)" id="shop-phase-title">ร้านการ์ด</div>
   </div>
   <div class="card" style="width:100%;max-width:580px">
-    <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.85rem">
-      🃏 การ์ดที่จั่วได้: <span style="color:var(--gold-light);font-weight:700" id="shop-drawn-cards"></span>
+    <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:.85rem;display:flex;justify-content:space-between;align-items:center">
+      <span>🃏 การ์ดที่จั่วได้: <span style="color:var(--gold-light);font-weight:700" id="shop-drawn-cards"></span></span>
+      <span id="shop-card-limit" style="color:#a0b4d6;font-size:.8rem"></span>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(201,162,39,.1);border:1px solid rgba(201,162,39,.3);border-radius:10px;padding:10px 14px;margin-bottom:12px">
       <span>💰 ทองซื้อการ์ดพิเศษ</span>
