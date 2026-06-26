@@ -652,7 +652,7 @@ async function applyCard(card,cardIdx,aIdx,tIdx,g){
   if(card.type==='attack'){const dmg=card.dmg||2;if(tgt.shield){tgt.shield=false;log=`⚔️ ${att.name} โจมตี ${tgt.name} แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-dmg);log=`⚔️ ${att.name} โจมตี ${tgt.name} -${dmg}HP! (เหลือ ${tgt.hp})`;setTimeout(()=>flashAttack(targetIdx,dmg),100);if(tgt.hp<=0){tgt.eliminated=true;log+=` 💀 ${tgt.name} แพ้!`;}}}
   else if(card.type==='defend'){att.shield=true;log=`🛡️ ${att.name} ตั้งรับ!`;}
   else if(card.type==='heal'){att.hp=Math.min(MAX_HP,(att.hp||0)+1);log=`💚 ${att.name} ฟื้น 1 HP! (${att.hp} HP)`;}
-  else if(card.type==='steal'){if(tgt.shield){tgt.shield=false;log=`💜 ${att.name} ขโมย HP แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-1);att.hp=Math.min(MAX_HP,(att.hp||0)+1);if(tgt.hp<=0)tgt.eliminated=true;log=`💜 ${att.name} ขโมย 1 HP จาก ${tgt.name}!`;setTimeout(()=>flashAttack(targetIdx,1),100);}}}
+  else if(card.type==='steal'){if(tgt.shield){tgt.shield=false;log=`💜 ${att.name} ขโมย HP แต่โดนป้องกัน! 🛡️`;}else{tgt.hp=Math.max(0,(tgt.hp||0)-1);att.hp=Math.min(MAX_HP,(att.hp||0)+1);if(tgt.hp<=0)tgt.eliminated=true;log=`💜 ${att.name} ขโมย 1 HP จาก ${tgt.name}!`;setTimeout(()=>flashAttack(targetIdx,1),100);}}
   const alive=teams.filter(t=>!t.eliminated&&t.hp>0);
   let nt=(g.battleTurn||0)+1,nti=nt%4,s=0;
   while((teams[nti].hp<=0||teams[nti].eliminated)&&s<8){nt++;nti=nt%4;s++;}
