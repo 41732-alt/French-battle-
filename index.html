@@ -343,7 +343,7 @@ async function saveMyTeamName(){
   const name=$('my-team-name-input').value.trim();
   if(!name){toast('❌ กรอกชื่อทีมด้วย');return;}
   await update(ref(db,`rooms/${roomCode}/teams/${myTeamIdx}`),{name});
-  toast('✅ บันทึกชื่อทีมแล้ว!');
+  toast('✅ บันทึกชื่อทีมแล้ว! (' + name + ')');
 }
 window.saveMyTeamName=saveMyTeamName;
 
@@ -364,7 +364,9 @@ async function joinGame(){
     const players=data.teams[tIdx].players||[];
     if(players.length>=2){toast('❌ ทีมเต็มแล้ว');setLoading(false);return;}
     players.push(name);
-    await update(ref(db,`rooms/${code}/teams/${tIdx}`),{players});
+    // Save as plain indexed object to avoid Firebase array flattening
+    const playersObj={};players.forEach((n,i)=>playersObj[i]=n);
+    await update(ref(db,`rooms/${code}/teams/${tIdx}`),{players:playersObj});
     roomCode=code;myRole='player';myTeamIdx=tIdx;
     $('waiting-code').textContent=code;
     showScreen('waiting-screen');
@@ -389,7 +391,7 @@ function syncUI(g){
   updateScoreboard(g);
   if(myRole==='player'&&myTeamIdx!==null){
     const mt=g.teams[myTeamIdx];
-    if(mt&&mt.kicked&&(mt.players||[]).length===0){showScreen('kicked-screen');return;}
+    if(mt&&mt.kicked&&(mnormArr(t.players)).length===0){showScreen('kicked-screen');return;}
   }
   if(g.phase==='lobby'){
     if(myRole==='host') renderHostLobby(g);
@@ -417,11 +419,16 @@ function syncUI(g){
 // ════════════════════════════════════════════
 //  LOBBY
 // ════════════════════════════════════════════
+
+function normArr(v){ return v?(Array.isArray(v)?v:Object.values(v)):[];}
+
 function renderHostLobby(g){
   const list=$('lobby-team-list');
   if(!list)return;
   list.innerHTML=g.teams.map((t,i)=>{
-    const p=t.players||[];
+    // Firebase stores arrays as objects — normalize
+    const raw=t.players;
+    const p=raw?(Array.isArray(raw)?raw:Object.values(raw)):[];
     const hasPlayers=p.length>0;
     return `<div class="lobby-team-row" style="border-left:3px solid ${t.color}">
       <span style="color:${t.color};font-weight:700;min-width:80px">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}</span>
@@ -432,7 +439,7 @@ function renderHostLobby(g){
       </div>
     </div>`;}).join('');
   // enable start when at least 1 player joined
-  const total=g.teams.reduce((s,t)=>s+(t.players||[]).length,0);
+  const total=g.teams.reduce((s,t)=>s+normArr(t.players).length,0);
   const btn=$('start-btn');
   if(btn) btn.disabled=total<1;
 }
@@ -446,7 +453,8 @@ function renderWaiting(g){
   if(wtEl){wtEl.style.color=myTeam.color||'#fff';wtEl.textContent=`${TEAM_EMOJIS[myTeamIdx]} ทีมของฉัน: ${myTeam.name||'ทีม '+(myTeamIdx+1)}`;}
   if(wnEl) wnEl.placeholder=myTeam.name||'ตั้งชื่อทีม...';
   if(teamsEl) teamsEl.innerHTML=g.teams.map((t,i)=>{
-    const p=t.players||[];
+    const raw=t.players;
+    const p=raw?(Array.isArray(raw)?raw:Object.values(raw)):[];
     return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)">
       <span style="color:${t.color};font-weight:700">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}</span>
       <span style="color:${p.length>0?'#fff':'#666'}">${p.length>0?p.join(' & '):'รอผู้เล่น...'}</span>
@@ -756,7 +764,7 @@ function renderBattle(g){
       const chose=choices[`team${i}`]!==undefined;
       return `<div class="battle-team" id="bteam-${i}" style="border:2px solid ${dead?'rgba(255,255,255,.1)':t.color};${dead?'opacity:.35':''}">
         <div class="battle-team-name" style="color:${t.color}">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${dead?' 💀':''}</div>
-        <div style="font-size:.75rem;color:#a0b4d6">${(t.players||[]).join(' & ')}</div>
+        <div style="font-size:.75rem;color:#a0b4d6">${normArr(t.players).join(' & ')}</div>
         <div class="hp-bar-wrap"><div class="hp-bar" id="hpbar-${i}" style="width:${Math.max(0,((t.hp||0)/MAX_HP)*100)}%;background:${(t.hp||0)>5?'#27ae60':(t.hp||0)>2?'#f39c12':'#e74c3c'}"></div></div>
         <div class="hp-text">❤️ <span id="hpnum-${i}">${Math.max(0,t.hp||0)}</span>/${MAX_HP}</div>
         <div style="font-size:.75rem;margin-top:4px;color:${chose?'#7effc0':'#a0b4d6'}">
@@ -869,7 +877,7 @@ window.hostResolveBattle=async function(){ await resolveBattle(); };
 async function resolveBattle(){
   if(!lastG||!roomCode)return;
   const g=lastG;
-  const teams=g.teams.map(t=>({...t,cards:[...(t.cards||[])],players:[...(t.players||[])]}));
+  const teams=g.teams.map(t=>({...t,cards:[...(t.cards||[])],players:[...normArr(t.players)]}));
   const choices=g.battleChoices||{};
   const logs=[];
   const dmgTaken={};
@@ -1161,7 +1169,7 @@ function renderResult(g){
       <div class="score-row">
         <div>
           <span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][rank]} ${t.name||'ทีม '}</span>
-          <span style="font-size:.78rem;color:#a0b4d6;margin-left:6px">${(t.players||[]).join(' & ')}</span>
+          <span style="font-size:.78rem;color:#a0b4d6;margin-left:6px">${normArr(t.players).join(' & ')}</span>
         </div>
         <div style="text-align:right">
           <div class="score-hp">${(t.hp||0)<=0?'💀':`❤️ ${t.hp}`}</div>
@@ -1216,7 +1224,7 @@ function exportPDF(g){
     <tr>
       <td class="rank-${i+1}">${['🥇','🥈','🥉','4️⃣'][i]}</td>
       <td style="font-weight:700">${t.name||'ทีม '+(i+1)}</td>
-      <td>${(t.players||[]).join(', ')||'-'}</td>
+      <td>${normArr(t.players).join(', ')||'-'}</td>
       <td>${(t.hp||0)<=0?'💀':`❤️ ${t.hp}`}</td>
       <td>✅ ${t.quizScore||0} ข้อ</td>
       <td>💰 ${t.gold||0}</td>
