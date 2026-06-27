@@ -391,7 +391,11 @@ function syncUI(g){
     const mt=g.teams[myTeamIdx];
     if(mt&&mt.kicked&&(mt.players||[]).length===0){showScreen('kicked-screen');return;}
   }
-  if(g.phase==='lobby'){renderHostLobby(g);if(myRole==='player')renderWaiting(g);return;}
+  if(g.phase==='lobby'){
+    if(myRole==='host') renderHostLobby(g);
+    else { showScreen('waiting-screen'); renderWaiting(g); }
+    return;
+  }
   if(g.phase==='cat_select'){showScreen('cat-select-screen');renderCatSelect(g);return;}
   if(g.phase==='quiz'){showScreen('quiz-screen');renderQuiz(g);return;}
   if(g.phase==='shop'){showScreen('shop-screen');renderShop(g);return;}
@@ -414,27 +418,39 @@ function syncUI(g){
 //  LOBBY
 // ════════════════════════════════════════════
 function renderHostLobby(g){
-  $('lobby-team-list').innerHTML=g.teams.map((t,i)=>{
+  const list=$('lobby-team-list');
+  if(!list)return;
+  list.innerHTML=g.teams.map((t,i)=>{
     const p=t.players||[];
+    const hasPlayers=p.length>0;
     return `<div class="lobby-team-row" style="border-left:3px solid ${t.color}">
-      <span style="color:${t.color};font-weight:700">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}</span>
-      <span>${p.length>0?p.join(' & '):'<span style="color:#666">รอผู้เล่น...</span>'}</span>
-      <div style="display:flex;gap:6px;align-items:center">
+      <span style="color:${t.color};font-weight:700;min-width:80px">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}</span>
+      <span style="flex:1;color:${hasPlayers?'#fff':'#666'}">${hasPlayers?p.join(' & '):'รอผู้เล่น...'}</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
         <span style="font-size:.8rem;color:#a0b4d6">${p.length}/2</span>
-        ${myRole==='host'&&p.length>0?`<button class="kick-btn" onclick="kickPlayer(${i})">⚡ เตะ</button>`:''}
+        ${hasPlayers?`<button class="kick-btn" onclick="kickPlayer(${i})">⚡ เตะ</button>`:''}
       </div>
     </div>`;}).join('');
-  $('start-btn').disabled=g.teams.reduce((s,t)=>s+(t.players||[]).length,0)<1;
+  // enable start when at least 1 player joined
+  const total=g.teams.reduce((s,t)=>s+(t.players||[]).length,0);
+  const btn=$('start-btn');
+  if(btn) btn.disabled=total<1;
 }
 
 function renderWaiting(g){
+  if(myTeamIdx===null||!g.teams)return;
   const myTeam=g.teams[myTeamIdx]||{};
-  $('waiting-my-team').style.color=myTeam.color||'#fff';
-  $('waiting-my-team').textContent=`${TEAM_EMOJIS[myTeamIdx]} ทีมของฉัน: ${myTeam.name||'ทีม '+(myTeamIdx+1)}`;
-  $('my-team-name-input').placeholder=myTeam.name||'ตั้งชื่อทีม...';
-  $('waiting-teams').innerHTML=g.teams.map((t,i)=>{
+  const wtEl=$('waiting-my-team');
+  const wnEl=$('my-team-name-input');
+  const teamsEl=$('waiting-teams');
+  if(wtEl){wtEl.style.color=myTeam.color||'#fff';wtEl.textContent=`${TEAM_EMOJIS[myTeamIdx]} ทีมของฉัน: ${myTeam.name||'ทีม '+(myTeamIdx+1)}`;}
+  if(wnEl) wnEl.placeholder=myTeam.name||'ตั้งชื่อทีม...';
+  if(teamsEl) teamsEl.innerHTML=g.teams.map((t,i)=>{
     const p=t.players||[];
-    return `<div style="color:${t.color};font-weight:700">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}: ${p.length>0?p.join(' & '):'รอ...'}</div>`;
+    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)">
+      <span style="color:${t.color};font-weight:700">${TEAM_EMOJIS[i]} ${t.name||'ทีม '+(i+1)}</span>
+      <span style="color:${p.length>0?'#fff':'#666'}">${p.length>0?p.join(' & '):'รอผู้เล่น...'}</span>
+    </div>`;
   }).join('');
 }
 
