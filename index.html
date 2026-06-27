@@ -361,12 +361,12 @@ async function joinGame(){
     if(!snap.exists()){toast('❌ ไม่พบห้อง');setLoading(false);return;}
     const data=snap.val();
     if(data.phase!=='lobby'){toast('❌ เกมเริ่มไปแล้ว');setLoading(false);return;}
-    const players=data.teams[tIdx].players||[];
+    const rawP=data.teams[tIdx].players;
+    const players=rawP?(Array.isArray(rawP)?[...rawP]:Object.values(rawP)):[];
     if(players.length>=2){toast('❌ ทีมเต็มแล้ว');setLoading(false);return;}
     players.push(name);
-    // Save as plain indexed object to avoid Firebase array flattening
-    const playersObj={};players.forEach((n,i)=>playersObj[i]=n);
-    await update(ref(db,`rooms/${code}/teams/${tIdx}`),{players:playersObj});
+    // Save as plain array — Firebase will handle it
+    await update(ref(db,`rooms/${code}/teams/${tIdx}`),{players:players});
     roomCode=code;myRole='player';myTeamIdx=tIdx;
     $('waiting-code').textContent=code;
     showScreen('waiting-screen');
@@ -394,7 +394,7 @@ function syncUI(g){
     if(mt&&mt.kicked&&(mnormArr(t.players)).length===0){showScreen('kicked-screen');return;}
   }
   if(g.phase==='lobby'){
-    if(myRole==='host') renderHostLobby(g);
+    if(myRole==='host'){ showScreen('host-lobby'); renderHostLobby(g); }
     else { showScreen('waiting-screen'); renderWaiting(g); }
     return;
   }
