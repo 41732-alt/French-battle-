@@ -296,7 +296,7 @@ async function hostGame(){
   const code=genCode();roomCode=code;myRole='host';
   const teams=Array.from({length:4},(_,i)=>({
     name:`ทีม ${i+1}`,players:[],color:TEAM_COLORS[i],
-    hp:MAX_HP,gold:0,cards:[],shield:false,eliminated:false,kicked:false
+    hp:MAX_HP,gold:0,cards:{},shield:false,eliminated:false,kicked:false,players:{},quizScore:0,streak:0
   }));
   await set(roomRef(code),{
     phase:'lobby',currentQ:0,selectedCat:null,selectedLevel:null,
@@ -365,8 +365,9 @@ async function joinGame(){
     const players=rawP?(Array.isArray(rawP)?[...rawP]:Object.values(rawP)):[];
     if(players.length>=2){toast('❌ ทีมเต็มแล้ว');setLoading(false);return;}
     players.push(name);
-    // Save as plain array — Firebase will handle it
-    await update(ref(db,`rooms/${code}/teams/${tIdx}`),{players:players});
+    // Save as indexed object — Firebase stores arrays safely this way
+    const pObj={};players.forEach((n,i)=>pObj[i]=n);
+    await update(ref(db,`rooms/${code}/teams/${tIdx}`),{players:pObj});
     roomCode=code;myRole='player';myTeamIdx=tIdx;
     $('waiting-code').textContent=code;
     showScreen('waiting-screen');
@@ -419,6 +420,9 @@ function syncUI(g){
 // ════════════════════════════════════════════
 //  LOBBY
 // ════════════════════════════════════════════
+
+
+function normCards(v){ if(!v)return []; if(Array.isArray(v))return v.filter(x=>x!=null); if(typeof v==='object')return Object.values(v).filter(x=>x!=null); return []; }
 
 function normArr(v){ return v?(Array.isArray(v)?v:Object.values(v)):[];}
 
@@ -632,18 +636,18 @@ async function triggerQuizResult(){
   const pool=lastG.quizPool||[],qIdx=lastG.currentQ||0,q=pool[qIdx];
   if(!q)return;
   const answers=lastG.answers||{};
-  const teams=lastG.teams.map(t=>({...t,cards:[...(t.cards||[])]}));
+  const teams=lastG.teams.map(t=>({...t,cards:[...normCards(t.cards)]}));
   const rewards={};
   for(let i=0;i<4;i++){
     const key=`team${i}`,ans=answers[key];
     if(ans===q.ans){
       const card=drawCard();
-      if((teams[i].cards||[]).length<MAX_CARDS) teams[i].cards.push(card);
+      if(normCards(teams[i].cards).length<MAX_CARDS) teams[i].cards.push(card);
       teams[i].gold=(teams[i].gold||0)+3;
       teams[i].quizScore=(teams[i].quizScore||0)+1;
       teams[i].streak=(teams[i].streak||0)+1;
       let wildCard=null;
-      if(teams[i].streak%3===0&&(teams[i].cards||[]).length<MAX_CARDS){
+      if(teams[i].streak%3===0&&normCards(teams[i].cards).length<MAX_CARDS){
         wildCard=drawWildCard();
         teams[i].cards.push(wildCard);
       }
@@ -703,8 +707,8 @@ function renderShop(g){
   const sIdx=g.shopTeamIdx||0,team=g.teams[sIdx];
   const isMyTurn=myRole==='host'||myTeamIdx===sIdx;
   $('shop-phase-title').textContent=`${TEAM_EMOJIS[sIdx]} ${team.name||'ทีม '+(sIdx+1)} — ช้อปการ์ด`;
-  $('shop-card-limit').textContent=`🃏 การ์ดในมือ: ${(team.cards||[]).length}/${MAX_CARDS}`;
-  $('shop-drawn-cards').innerHTML=(team.cards||[]).length>0?(team.cards||[]).map(c=>`<span>${c.icon}${c.name}</span>`).join(' '):'ยังไม่มี';
+  $('shop-card-limit').textContent=`🃏 การ์ดในมือ: ${normCards(team.cards).length}/${MAX_CARDS}`;
+  $('shop-drawn-cards').innerHTML=normCards(team.cards).length>0?normCards(team.cards).map(c=>`<span>${c.icon}${c.name}</span>`).join(' '):'ยังไม่มี';
   $('shop-gold-amt').textContent=team.gold||0;
   $('shop-grid').innerHTML=SKILL_CARDS.map(sk=>`
     <div class="skill-card ${!isMyTurn?'disabled-card':''}" onclick="${isMyTurn?`buyCard('${sk.id}')`:''}" title="${sk.desc}">
@@ -818,7 +822,7 @@ function renderBattle(g){
 
   $('pass-btn').style.display='inline-block';
 
-  const cards=(myTeamData?.cards)||[];
+  const cards=normCards(myTeamData?.cards);
   if(cards.length===0){
     handDiv.innerHTML='<div style="color:#a0b4d6;font-size:.85rem">ไม่มีการ์ด — กดผ่านเทิร์น</div>';
     return;
@@ -877,7 +881,7 @@ window.hostResolveBattle=async function(){ await resolveBattle(); };
 async function resolveBattle(){
   if(!lastG||!roomCode)return;
   const g=lastG;
-  const teams=g.teams.map(t=>({...t,cards:[...(t.cards||[])],players:[...normArr(t.players)]}));
+  const teams=g.teams.map(t=>({...t,cards:[...normCards(t.cards)],players:[...normArr(t.players)]}));
   const choices=g.battleChoices||{};
   const logs=[];
   const dmgTaken={};
@@ -1238,7 +1242,7 @@ function exportPDF(g){
 window.exportPDF = exportPDF;
 
 window.playAgain=async function(){
-  const teams=(lastG?.teams||[]).map(t=>({...t,hp:MAX_HP,gold:0,cards:[],shield:false,eliminated:false,kicked:false}));
+  const teams=(lastG?.teams||[]).map(t=>({...t,hp:MAX_HP,gold:0,cards:{},shield:false,eliminated:false,kicked:false,players:{},quizScore:0,streak:0}));
   await update(roomRef(roomCode),{phase:'lobby',currentQ:0,answers:{},battleTurn:0,battleTurnTeam:0,winner:null,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
 };
 </script>
