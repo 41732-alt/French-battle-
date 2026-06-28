@@ -6,10 +6,10 @@
 <title>Français Battle 🗼</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, update, onValue, serverTimestamp }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+// Firebase compat API (no import/module needed)
 
 const firebaseConfig = {
   apiKey:"AIzaSyAV2c1ZD8K1H_jsT8vaUcSi4Gp-w10aKSM",
@@ -21,8 +21,8 @@ const firebaseConfig = {
   appId:"1:1059190564649:web:8458ae19e85a37b974f938"
 };
 
-const app = initializeApp(firebaseConfig);
-const db  = getDatabase(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 const QUESTION_BANK = {
   greet: {
@@ -226,7 +226,7 @@ async function startCustomQuiz(){
   const pool=[...localCustomQ].sort(()=>Math.random()-.5).slice(0,Math.min(localCustomQ.length,20));
   setLoading(true,'กำลังเริ่ม...');
   showCountdown(async()=>{
-    await update(roomRef(roomCode),{
+    await db.ref(`rooms/${roomCode}`).update({
       phase:'quiz', currentQ:0, quizPool:pool,
       selectedCat:'custom', selectedLevel:'easy',
       answers:{}, quizStartTime:Date.now(), quizShowResult:false, log:'เริ่มตอบ!'
@@ -276,7 +276,7 @@ let timerInterval=null, timerStarted=false;
 
 const $  = id => document.getElementById(id);
 const rnd= n  => Math.floor(Math.random()*n);
-const roomRef = code => ref(db, `rooms/${code}`);
+const roomRef = code => db.ref(`rooms/${roomCode}`);
 
 function genCode(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
 function drawCard(){ return {...SKILL_CARDS[rnd(SKILL_CARDS.length)]}; }
@@ -322,9 +322,9 @@ function startCountdown(startTime, total, onEnd){
 // ════════════════════════════════════════════
 //  FIREBASE LISTENER
 // ════════════════════════════════════════════
-function listenRoom(code){
-  if(unsubRoom) unsubRoom();
-  unsubRoom = onValue(roomRef(code), snap => {
+function listenRoom(code){ // compat
+  if(unsubRoom){ try{unsubRoom.off('value');}catch(e){} unsubRoom=null; }
+  unsubRoom = db.ref(`rooms/${code}`).on('value', snap => {
     if(!snap.exists()) return;
     const g = snap.val(); lastG = g;
     syncUI(g);
@@ -363,12 +363,12 @@ async function hostGame(){
     eliminated:false, kicked:false, players:{placeholder:true},
     quizScore:0, streak:0
   });
-  await set(roomRef(code),{
+  await db.ref(`rooms/${roomCode}`).set({
     phase:'lobby', currentQ:0,
     selectedCat:null, selectedLevel:null, selectedQCount:20,
     answers:{}, battleChoices:{}, battleRound:0, battlePhase:'choose',
     teams: {0:mkTeam(0), 1:mkTeam(1), 2:mkTeam(2), 3:mkTeam(3)},
-    log:'รอผู้เล่น...', winner:null, createdAt:serverTimestamp()
+    log:'รอผู้เล่น...', winner:null, createdAt:firebase.database.ServerValue.TIMESTAMP
   });
   $('room-code-display').textContent=code;
   generateQR(code);
@@ -387,13 +387,13 @@ function generateQR(code){
 
 async function setTeamName(i){
   const n=prompt(`ชื่อทีม ${i+1}:`); if(!n) return;
-  await update(ref(db,`rooms/${roomCode}/teams/${i}`),{name:n});
+  await db.ref(`rooms/${roomCode}/teams/${i}`).update({name:n});
 }
 window.setTeamName=setTeamName;
 
 window.kickPlayer=async function(i){
   if(!confirm(`เตะทีม ${i+1} ออก?`)) return;
-  await update(ref(db,`rooms/${roomCode}/teams/${i}`),{players:{placeholder:true}, kicked:true, name:`ทีม ${i+1}`});
+  await db.ref(`rooms/${roomCode}/teams/${i}`).update({players:{placeholder:true}, kicked:true, name:`ทีม ${i+1}`});
   toast('✅ เตะออกแล้ว');
 };
 
@@ -408,7 +408,7 @@ async function joinGame(){
 
   $('loading-overlay').style.display='flex';
   try{
-    const snap=await get(roomRef(code));
+    const snap=await db.ref(`rooms/${roomCode}`).once('value');
     if(!snap.exists()){ toast('❌ ไม่พบห้อง'); $('loading-overlay').style.display='none'; return; }
     const g=snap.val();
     if(g.phase!=='lobby'){ toast('❌ เกมเริ่มไปแล้ว'); $('loading-overlay').style.display='none'; return; }
@@ -423,7 +423,7 @@ async function joinGame(){
     const pObj={placeholder:true};
     existing.forEach((n,i)=>{ pObj[i]=n; });
 
-    await update(ref(db,`rooms/${code}/teams/${ti}`),{players:pObj, kicked:false});
+    await db.ref(`rooms/${code}/teams/${ti}`).update({players:pObj, kicked:false});
     roomCode=code; myRole='player'; myTeamIdx=ti;
     $('waiting-code').textContent=code;
     showScreen('waiting-screen');
@@ -437,7 +437,7 @@ async function saveMyTeamName(){
   if(myTeamIdx===null||!roomCode) return;
   const n=$('my-team-name-input').value.trim();
   if(!n){ toast('❌ กรอกชื่อทีมด้วย'); return; }
-  await update(ref(db,`rooms/${roomCode}/teams/${myTeamIdx}`),{name:n});
+  await db.ref(`rooms/${roomCode}/teams/${myTeamIdx}`).update({name:n});
   toast(`✅ บันทึกชื่อทีม "${n}" แล้ว!`);
 }
 window.saveMyTeamName=saveMyTeamName;
@@ -501,7 +501,7 @@ function renderWaiting(g){
 }
 
 async function goToCatSelect(){
-  await update(roomRef(roomCode),{phase:'cat_select',selectedCat:null,selectedLevel:null});
+  await db.ref(`rooms/${roomCode}`).update({phase:'cat_select',selectedCat:null,selectedLevel:null});
 }
 window.goToCatSelect=goToCatSelect;
 
@@ -542,9 +542,9 @@ function renderCatSelect(g){
   $('cat-select-info').textContent=!isHost?'⏳ รอครูเลือกหมวดหมู่...':(sel&&lv?`✅ ${QUESTION_BANK[sel].label} ระดับ${lv==='easy'?'ง่าย':'ยาก'} ${qc}ข้อ`:'');
 }
 
-window.selectCat=async function(k){ await update(roomRef(roomCode),{selectedCat:k,selectedLevel:null}); };
-window.selectLevel=async function(lv){ await update(roomRef(roomCode),{selectedLevel:lv}); };
-window.selectQCount=async function(n){ await update(roomRef(roomCode),{selectedQCount:n}); };
+window.selectCat=async function(k){ await db.ref(`rooms/${roomCode}`).update({selectedCat:k,selectedLevel:null}); };
+window.selectLevel=async function(lv){ await db.ref(`rooms/${roomCode}`).update({selectedLevel:lv}); };
+window.selectQCount=async function(n){ await db.ref(`rooms/${roomCode}`).update({selectedQCount:n}); };
 
 function showCountdown(cb){
   const ov=document.createElement('div');
@@ -565,7 +565,7 @@ async function startQuiz(){
   if(!lastG?.selectedCat||!lastG?.selectedLevel) return;
   const pool=[...QUESTION_BANK[lastG.selectedCat][lastG.selectedLevel]].sort(()=>Math.random()-.5).slice(0,lastG.selectedQCount||20);
   showCountdown(async()=>{
-    await update(roomRef(roomCode),{
+    await db.ref(`rooms/${roomCode}`).update({
       phase:'quiz', currentQ:0, quizPool:pool,
       answers:{}, quizStartTime:Date.now(), quizShowResult:false
     });
@@ -624,7 +624,7 @@ window.submitAnswer=async function(chosen){
   document.querySelectorAll('.opt-btn').forEach((b,i)=>{b.disabled=true;if(i===chosen)b.classList.add('chosen');});
   const fb=$('answer-feedback'); if(fb){fb.style.display='block';fb.textContent='✅ ส่งคำตอบแล้ว!';}
   const u={}; u[`rooms/${roomCode}/answers/${mk}`]=chosen;
-  await update(ref(db),u);
+  await db.ref().update(u);
 };
 
 async function triggerQuizResult(){
@@ -658,7 +658,7 @@ async function triggerQuizResult(){
   teams.forEach((t,i)=>{ u[`rooms/${roomCode}/teams/${i}`]=t; });
   u[`rooms/${roomCode}/quizShowResult`]=true;
   u[`rooms/${roomCode}/quizRewards`]=rewards;
-  await update(ref(db),u);
+  await db.ref().update(u);
 }
 
 function renderQuizResult(g,q){
@@ -685,9 +685,9 @@ window.hostNextQuestion=async function(){
   if(!lastG||!roomCode) return;
   const next=(lastG.currentQ||0)+1, pool=lastG.quizPool||[];
   if(next>=pool.length){
-    await update(roomRef(roomCode),{phase:'shop',shopTeamIdx:0,quizShowResult:false,answers:{},quizRewards:{}});
+    await db.ref(`rooms/${roomCode}`).update({phase:'shop',shopTeamIdx:0,quizShowResult:false,answers:{},quizRewards:{}});
   } else {
-    await update(roomRef(roomCode),{currentQ:next,answers:{},quizShowResult:false,quizRewards:{},quizStartTime:Date.now()});
+    await db.ref(`rooms/${roomCode}`).update({currentQ:next,answers:{},quizShowResult:false,quizRewards:{},quizStartTime:Date.now()});
   }
 };
 
@@ -731,7 +731,7 @@ window.buyCard=async function(skillId){
   const cObj={placeholder:true}; cards.forEach((c,j)=>cObj[j]=c);
   const updates={cards:cObj};
   if(sk.cost>0) updates.gold=(t.gold||0)-sk.cost;
-  await update(ref(db,`rooms/${roomCode}/teams/${si}`),updates);
+  await db.ref(`rooms/${roomCode}/teams/${si}`).update(updates);
   toast(`✅ ซื้อ ${sk.icon}${sk.name}!`);
 };
 
@@ -739,9 +739,9 @@ window.shopNext=async function(){
   if(!lastG||!roomCode) return;
   const next=(lastG.shopTeamIdx||0)+1;
   if(next>=4){
-    await update(roomRef(roomCode),{phase:'battle',battleRound:0,battleChoices:{},battlePhase:'choose',battleStartTime:Date.now(),log:'⚔️ เลือกสกิล!'});
+    await db.ref(`rooms/${roomCode}`).update({phase:'battle',battleRound:0,battleChoices:{},battlePhase:'choose',battleStartTime:Date.now(),log:'⚔️ เลือกสกิล!'});
   } else {
-    await update(roomRef(roomCode),{shopTeamIdx:next});
+    await db.ref(`rooms/${roomCode}`).update({shopTeamIdx:next});
   }
 };
 
@@ -849,14 +849,14 @@ async function submitChoice(choice){
   if(!roomCode||myTeamIdx===null) return;
   document.querySelectorAll('.hand-card').forEach(b=>b.disabled=true);
   const u={}; u[`rooms/${roomCode}/battleChoices/team${myTeamIdx}`]=choice;
-  await update(ref(db),u);
+  await db.ref().update(u);
   toast('✅ เลือกแล้ว รอทีมอื่น...');
 }
 
 window.passBattleTurn=async function(){
   if(!roomCode||myTeamIdx===null) return;
   const u={}; u[`rooms/${roomCode}/battleChoices/team${myTeamIdx}`]={cardId:null,cardIdx:-1,targetIdx:-1};
-  await update(ref(db),u); toast('➡ ผ่านเทิร์น');
+  await db.ref().update(u); toast('➡ ผ่านเทิร์น');
 };
 window.hostResolveBattle=async function(){ await resolveBattle(); };
 
@@ -924,7 +924,7 @@ async function resolveBattle(){
   u[`rooms/${roomCode}/battleResolveLog`]=logs;
   u[`rooms/${roomCode}/battleDmgTaken`]=dmgTaken;
   if(alive.length<=1){ u[`rooms/${roomCode}/phase`]='result'; u[`rooms/${roomCode}/winner`]=alive.length===1?alive[0].name:[...teams].sort((a,b)=>(b.hp||0)-(a.hp||0))[0].name; }
-  await update(ref(db),u);
+  await db.ref().update(u);
 }
 
 function renderBattleResolve(g){
@@ -947,13 +947,13 @@ window.nextBattleRound=async function(){
   if(!lastG||!roomCode) return;
   const alive=Object.values(lastG.teams||{}).filter(t=>!t.eliminated&&(t.hp||0)>0);
   if(alive.length<=1){ await triggerResult(lastG); return; }
-  await update(roomRef(roomCode),{battleRound:(lastG.battleRound||0)+1,battleChoices:{},battlePhase:'choose',battleStartTime:Date.now(),log:'รอบใหม่!'});
+  await db.ref(`rooms/${roomCode}`).update({battleRound:(lastG.battleRound||0)+1,battleChoices:{},battlePhase:'choose',battleStartTime:Date.now(),log:'รอบใหม่!'});
 };
 
 async function triggerResult(g){
   const alive=Object.values(g.teams||{}).filter(t=>!t.eliminated&&(t.hp||0)>0);
   const winner=alive.length===1?alive[0].name:[...Object.values(g.teams||{})].sort((a,b)=>(b.hp||0)-(a.hp||0))[0]?.name||'?';
-  await update(roomRef(roomCode),{phase:'result',winner});
+  await db.ref(`rooms/${roomCode}`).update({phase:'result',winner});
 }
 
 // ════════════════════════════════════════════
@@ -976,7 +976,7 @@ window.playAgain=async function(){
   Object.values(lastG?.teams||{}).forEach((t,i)=>{
     teams[i]={...t,hp:MAX_HP,gold:0,cards:{placeholder:true},shield:false,eliminated:false,kicked:false,players:t.players||{placeholder:true},quizScore:0,streak:0};
   });
-  await update(roomRef(roomCode),{phase:'lobby',currentQ:0,answers:{},battleRound:0,battleChoices:{},battlePhase:'choose',winner:null,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
+  await db.ref(`rooms/${roomCode}`).update({phase:'lobby',currentQ:0,answers:{},battleRound:0,battleChoices:{},battlePhase:'choose',winner:null,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
 };
 
 function exportPDF(g){
@@ -986,7 +986,7 @@ function exportPDF(g){
   const mvp=[...teams].sort((a,b)=>(b.quizScore||0)-(a.quizScore||0))[0];
   const now=new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
   const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Français Battle</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px}h1{text-align:center;color:#0d1b4b}table{width:100%;border-collapse:collapse}th{background:#0d1b4b;color:#fff;padding:10px}td{padding:10px;border-bottom:1px solid #eee}@media print{body{margin:0}}</style></head><body><h1>🗼 Français Battle — ${now}</h1><p style="text-align:center">ผู้ชนะ: <strong>${g.winner||'-'}</strong> · MVP: <strong>${mvp?.name||'-'}</strong></p><table><tr><th>อันดับ</th><th>ทีม</th><th>ผู้เล่น</th><th>HP</th><th>ตอบถูก</th><th>ทอง</th></tr>${sorted.map((t,i)=>`<tr><td>${['🥇','🥈','🥉','4️⃣'][i]}</td><td>${t.name}</td><td>${getPlayers(t).join(', ')||'-'}</td><td>${(t.hp||0)<=0?'💀':`❤️${t.hp}`}</td><td>${t.quizScore||0}</td><td>${t.gold||0}</td></tr>`).join('')}</table><script>window.onload=()=>window.print()<\/script></body></html>`);
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Français Battle</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:20px}h1{text-align:center;color:#0d1b4b}table{width:100%;border-collapse:collapse}th{background:#0d1b4b;color:#fff;padding:10px}td{padding:10px;border-bottom:1px solid #eee}@media print{body{margin:0}}</style></head><body><h1>🗼 Français Battle — ${now}</h1><p style="text-align:center">ผู้ชนะ: <strong>${g.winner||'-'}</strong> · MVP: <strong>${mvp?.name||'-'}</strong></p><table><tr><th>อันดับ</th><th>ทีม</th><th>ผู้เล่น</th><th>HP</th><th>ตอบถูก</th><th>ทอง</th></tr>${sorted.map((t,i)=>`<tr><td>${['🥇','🥈','🥉','4️⃣'][i]}</td><td>${t.name}</td><td>${getPlayers(t).join(', ')||'-'}</td><td>${(t.hp||0)<=0?'💀':`❤️${t.hp}`}</td><td>${t.quizScore||0}</td><td>${t.gold||0}</td></tr>`).join('')}</table><scr"+"ipt>window.onload=()=>window.print()<\/scr"+"ipt></body></html>`);
   win.document.close();
 }
 window.exportPDF=exportPDF;
@@ -999,7 +999,6 @@ window.addEventListener('load',()=>{
 });
 
 // Custom questions
-let localCustomQ=[];
 window.renderCustomQEditor=function(){ showScreen('custom-q-screen'); refreshCQList(); };
 window.addCustomQ=function(){
   const q=$('cq-question').value.trim();
@@ -1020,9 +1019,10 @@ window.startCustomQuiz=async function(){
   if(!roomCode||!localCustomQ.length){ toast('❌ ต้องมีอย่างน้อย 1 คำถาม'); return; }
   const pool=[...localCustomQ].sort(()=>Math.random()-.5).slice(0,20);
   showCountdown(async()=>{
-    await update(roomRef(roomCode),{phase:'quiz',currentQ:0,quizPool:pool,selectedCat:'custom',selectedLevel:'easy',answers:{},quizStartTime:Date.now(),quizShowResult:false});
+    await db.ref(`rooms/${roomCode}`).update({phase:'quiz',currentQ:0,quizPool:pool,selectedCat:'custom',selectedLevel:'easy',answers:{},quizStartTime:Date.now(),quizShowResult:false});
   });
 };
+
 </script>
 
 <style>
