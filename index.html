@@ -9,6 +9,12 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
+// Error handler
+window.onerror = function(msg, src, line, col, err) {
+  document.body.innerHTML = '<div style="color:red;padding:20px;font-size:1.2rem;background:#fff">' +
+    '<h2>JavaScript Error:</h2><p>' + msg + '</p><p>Line: ' + line + '</p><p>Source: ' + src + '</p></div>';
+  return false;
+};
 // Firebase compat API (no import/module needed)
 
 const firebaseConfig = {
