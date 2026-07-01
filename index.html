@@ -345,7 +345,7 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, set, get, update, onValue, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+import { getDatabase, ref, set, get, update, onValue, serverTimestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
 const firebaseConfig = {
   apiKey:"AIzaSyAV2c1ZD8K1H_jsT8vaUcSi4Gp-w10aKSM",
@@ -508,67 +508,9 @@ const QUESTION_BANK = {
 
 
 
-// ── CUSTOM QUESTIONS ─────────────────────────────────────────
-let localCustomQ = [];
-
-function renderCustomQEditor(){
-  showScreen('custom-q-screen');
-  refreshCustomQList();
-}
-window.renderCustomQEditor = renderCustomQEditor;
-
-function refreshCustomQList(){
-  const list = document.getElementById('custom-q-list');
-  if(!list) return;
-  if(localCustomQ.length===0){
-    list.innerHTML='<div style="color:#a0b4d6;font-size:.9rem;text-align:center;padding:16px">ยังไม่มีคำถาม — กดเพิ่มด้านล่าง</div>';
-    return;
-  }
-  list.innerHTML = localCustomQ.map((q,i)=>`
-    <div class="custom-q-row">
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:.9rem;margin-bottom:4px">${i+1}. ${q.q}</div>
-        <div style="font-size:.78rem;color:#a0b4d6">${q.opts.map((o,oi)=>oi===q.ans?`<span style="color:#7effc0">✅${o}</span>`:o).join(' · ')}</div>
-      </div>
-      <button onclick="removeCustomQ(${i})" style="background:rgba(231,76,60,.2);border:1px solid #e74c3c;color:#ff8e86;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'Sarabun',sans-serif;flex-shrink:0">ลบ</button>
-    </div>`).join('');
-}
-window.removeCustomQ = function(i){ localCustomQ.splice(i,1); refreshCustomQList(); const cqc=document.getElementById('custom-q-count');if(cqc)cqc.textContent=localCustomQ.length; };
-
-window.addCustomQ = function(){
-  const q = document.getElementById('cq-question').value.trim();
-  const opts = [
-    document.getElementById('cq-opt0').value.trim(),
-    document.getElementById('cq-opt1').value.trim(),
-    document.getElementById('cq-opt2').value.trim(),
-    document.getElementById('cq-opt3').value.trim(),
-  ];
-  const ans = parseInt(document.getElementById('cq-answer').value);
-  if(!q||opts.some(o=>!o)){ toast('❌ กรอกให้ครบทุกช่อง'); return; }
-  localCustomQ.push({q,opts,ans});
-  // clear inputs
-  ['cq-question','cq-opt0','cq-opt1','cq-opt2','cq-opt3'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  refreshCustomQList();
-  toast('✅ เพิ่มคำถามแล้ว! ('+localCustomQ.length+' ข้อ)');
-};
-
-async function startCustomQuiz(){
-  if(!roomCode){ toast('❌ ยังไม่ได้สร้างห้อง'); return; }
-  if(localCustomQ.length<1){ toast('❌ ต้องมีอย่างน้อย 1 คำถาม'); return; }
-  const pool=[...localCustomQ].sort(()=>Math.random()-.5).slice(0,Math.min(localCustomQ.length,20));
-  setLoading(true,'กำลังเริ่ม...');
-  showCountdown(async()=>{
-    await db.ref(`rooms/${roomCode}`).update({
-      phase:'quiz', currentQ:0, quizPool:pool,
-      selectedCat:'custom', selectedLevel:'easy',
-      answers:{}, quizStartTime:Date.now(), quizShowResult:false, log:'เริ่มตอบ!'
-    });
-    setLoading(false);
-  });
-}
-window.startCustomQuiz = startCustomQuiz;
+// (หมายเหตุ: ระบบคำถามกำหนดเองตัวจริงอยู่ด้านล่างของไฟล์ ใช้ตัวแปร localCQ / ฟังก์ชัน refreshCQ
+//  โค้ดชุดนี้เคยเป็นเวอร์ชันเก่าที่ใช้ Firebase v8 syntax (db.ref().update()) ซึ่งไม่ตรงกับ SDK v9
+//  ที่ import ไว้ด้านบน และไม่ได้ผูกกับปุ่มใดใน HTML เลย จึงลบออกเพื่อไม่ให้สับสน)
 
 // ── WILD CARDS ───────────────────────────────────────────────
 const WILD_CARDS = [
@@ -615,6 +557,22 @@ const $=id=>document.getElementById(id);
 const rnd=n=>Math.floor(Math.random()*n);
 const rr=code=>ref(db,`rooms/${code}`);
 function gc(){return Math.random().toString(36).slice(2,8).toUpperCase();}
+
+// ── SERVER-TIME SYNC ──
+// นาฬิกาเครื่องแต่ละคน (โฮสต์/นักเรียน) ไม่มีทางตรงกันเป๊ะ ใช้ .info/serverTimeOffset ของ
+// Firebase เพื่อคำนวณ "เวลาปัจจุบันตามเซิร์ฟเวอร์" แทนการใช้ Date.now() ของเครื่องตรงๆ
+// ป้องกันปัญหาตัวจับเวลานับถอยหลังไม่ตรงกัน และคะแนนความเร็วใน Kahoot Mode ไม่ยุติธรรม
+let serverOffset=0;
+onValue(ref(db,'.info/serverTimeOffset'),snap=>{serverOffset=snap.val()||0;});
+function nowServer(){return Date.now()+serverOffset;}
+
+// ── FISHER-YATES SHUFFLE ──
+// แทนที่ [...arr].sort(()=>Math.random()-.5) ซึ่งเป็นการสุ่มที่มี bias (ไม่กระจายเท่ากันจริง)
+function fyShuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
 function dc(){return{...SKILL_CARDS[rnd(SKILL_CARDS.length)]};}
 function dw(){return{...WILD_CARDS[rnd(WILD_CARDS.length)]};}
 function toA(v){if(!v)return[];if(Array.isArray(v))return v.filter(x=>x&&x!=='placeholder');if(typeof v==='object')return Object.values(v).filter(x=>x&&x!=='placeholder'&&x!==true);return[];}
@@ -626,7 +584,7 @@ function clrTimer(){if(timerIv){clearInterval(timerIv);timerIv=null;}timerOn=fal
 function startTimer(st,tot,onEnd){
   clrTimer();
   function tick(){
-    const rem=Math.max(0,tot-(Date.now()-st)/1000),val=Math.ceil(rem);
+    const rem=Math.max(0,tot-(nowServer()-st)/1000),val=Math.ceil(rem);
     const tc=$('timer-count'),tb=$('timer-bar');
     if(tc){tc.textContent=val;tc.style.color=val<=5?'#e74c3c':val<=10?'#f39c12':'#7effc0';}
     if(tb){tb.style.width=`${(rem/tot)*100}%`;tb.style.background=val<=5?'linear-gradient(90deg,#e74c3c,#ff6b6b)':val<=10?'linear-gradient(90deg,#f39c12,#f1c40f)':'linear-gradient(90deg,#c9a227,#f0d060)';}
@@ -720,13 +678,22 @@ async function joinGame(){
       $('waiting-code').textContent=code;
       ss('waiting-screen');listenRoom(code);
     } else {
-      // Battle team join
+      // Battle team join — ใช้ Firebase Transaction แทนการ อ่านค่า→เขียนค่า แบบเดิม
+      // เพราะถ้านักเรียนหลายคนกดเข้าทีมเดียวกันพร้อมกัน (เช่น 3-4 คนในเสี้ยววินาทีเดียวกัน)
+      // การอ่านแล้วเช็ค length ก่อนเขียน มีโอกาสสูงที่ทุกคนจะเห็นค่าเก่า (ยังไม่เต็ม) พร้อมกัน
+      // แล้วเขียนทับกันจนทีมมีคนเกิน 2 คน — runTransaction จะให้ Firebase ล็อคคิวจัดการทีละคำขอ
+      // และ retry ให้อัตโนมัติถ้าข้อมูลเปลี่ยนไปจากตอนเริ่มอ่าน
       const ti=parseInt($('join-team').value);
-      const existing=gp(g.teams?.[ti]||{});
-      if(existing.length>=2){toast('❌ ทีมเต็มแล้ว');$('loading-overlay').style.display='none';return;}
-      existing.push(name);
-      const pObj={_:true};existing.forEach((n,i)=>pObj[`p${i}`]=n);
-      await update(ref(db,`rooms/${code}/teams/${ti}`),{players:pObj,kicked:false});
+      const teamRef=ref(db,`rooms/${code}/teams/${ti}`);
+      let full=false;
+      const txResult=await runTransaction(teamRef,(team)=>{
+        const existing=gp(team||{});
+        if(existing.length>=2){full=true;return; } // abort — ไม่มีการเขียนใดๆ
+        existing.push(name);
+        const pObj={_:true};existing.forEach((n,i)=>pObj[`p${i}`]=n);
+        return {...(team||{}),players:pObj,kicked:false};
+      });
+      if(full||!txResult.committed){toast('❌ ทีมเต็มแล้ว');$('loading-overlay').style.display='none';return;}
       roomCode=code;myRole='player';myTi=ti;
       $('waiting-code').textContent=code;
       ss('waiting-screen');listenRoom(code);
@@ -876,9 +843,9 @@ function showCountdown(cb){
 
 async function startQuiz(){
   if(!lastG?.selectedCat||!lastG?.selectedLevel)return;
-  const pool=[...QUESTION_BANK[lastG.selectedCat][lastG.selectedLevel]].sort(()=>Math.random()-.5).slice(0,lastG.selectedQCount||20).map(shuffleQuestion);
+  const pool=fyShuffle(QUESTION_BANK[lastG.selectedCat][lastG.selectedLevel]).slice(0,lastG.selectedQCount||20).map(shuffleQuestion);
   showCountdown(async()=>{
-    await update(rr(roomCode),{phase:'quiz',currentQ:0,quizPool:pool,answers:{_:true},quizStartTime:Date.now(),quizShowResult:false});
+    await update(rr(roomCode),{phase:'quiz',currentQ:0,quizPool:pool,answers:{_:true},quizStartTime:nowServer(),quizShowResult:false});
   });
 }
 
@@ -966,7 +933,7 @@ async function nextQ(){
   if(!lastG||!roomCode)return;
   const next=(lastG.currentQ||0)+1,pool=lastG.quizPool||[];
   if(next>=pool.length){await update(rr(roomCode),{phase:'shop',shopTeamIdx:0,quizShowResult:false,answers:{_:true},quizRewards:{_:true}});}
-  else{await update(rr(roomCode),{currentQ:next,answers:{_:true},quizShowResult:false,quizRewards:{_:true},quizStartTime:Date.now()});}
+  else{await update(rr(roomCode),{currentQ:next,answers:{_:true},quizShowResult:false,quizRewards:{_:true},quizStartTime:nowServer()});}
 }
 
 // ── SHOP ──
@@ -1010,7 +977,7 @@ window.buyCd=async function(skillId){
 async function shopNext(){
   if(!lastG||!roomCode)return;
   const next=(lastG.shopTeamIdx||0)+1;
-  if(next>=4)await update(rr(roomCode),{phase:'battle',battleRound:0,battleChoices:{_:true},battlePhase:'choose',battleStartTime:Date.now(),log:'⚔️ เลือกสกิล!'});
+  if(next>=4)await update(rr(roomCode),{phase:'battle',battleRound:0,battleChoices:{_:true},battlePhase:'choose',battleStartTime:nowServer(),log:'⚔️ เลือกสกิล!'});
   else await update(rr(roomCode),{shopTeamIdx:next});
 }
 
@@ -1146,7 +1113,7 @@ async function nextBattleRound(){
   if(!lastG||!roomCode)return;
   const alive=Object.values(lastG.teams||{}).filter(t=>!t.eliminated&&(t.hp||0)>0);
   if(alive.length<=1){await triggerResult(lastG);return;}
-  await update(rr(roomCode),{battleRound:(lastG.battleRound||0)+1,battleChoices:{_:true},battlePhase:'choose',battleStartTime:Date.now(),log:'รอบใหม่!'});
+  await update(rr(roomCode),{battleRound:(lastG.battleRound||0)+1,battleChoices:{_:true},battlePhase:'choose',battleStartTime:nowServer(),log:'รอบใหม่!'});
 }
 async function triggerResult(g){
   const alive=Object.values(g.teams||{}).filter(t=>!t.eliminated&&(t.hp||0)>0);
@@ -1189,11 +1156,24 @@ function exportPDF(g){
 }
 
 // ── CUSTOM Q ──
-let localCQ=[];
+// เก็บลง localStorage ทุกครั้งที่เพิ่ม/ลบ กันคำถามหายตอนรีเฟรชหน้าจอ/เน็ตหลุด
+const CQ_STORAGE_KEY='frBattle_customQuestions';
+function loadCQ(){
+  try{
+    const raw=localStorage.getItem(CQ_STORAGE_KEY);
+    const parsed=raw?JSON.parse(raw):[];
+    return Array.isArray(parsed)?parsed:[];
+  }catch(e){return [];}
+}
+function saveCQ(){
+  try{localStorage.setItem(CQ_STORAGE_KEY,JSON.stringify(localCQ));}catch(e){}
+}
+let localCQ=loadCQ();
 function refreshCQ(){
   const l=$('custom-q-list');if(!l)return;
   l.innerHTML=localCQ.length?localCQ.map((q,i)=>`<div class="custom-q-row"><div style="flex:1"><div style="font-weight:700;font-size:.9rem">${i+1}. ${q.q}</div><div style="font-size:.78rem;color:#a0b4d6">${q.opts.map((o,oi)=>oi===q.ans?`<span style="color:#7effc0">✅${o}</span>`:o).join(' · ')}</div></div><button onclick="rmCQ(${i})" style="background:rgba(231,76,60,.2);border:1px solid #e74c3c;color:#ff8e86;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'Sarabun',sans-serif">ลบ</button></div>`).join(''):'<div style="color:#a0b4d6;text-align:center;padding:16px">ยังไม่มีคำถาม</div>';
   const c=$('custom-q-count');if(c)c.textContent=localCQ.length;
+  saveCQ();
 }
 window.rmCQ=function(i){localCQ.splice(i,1);refreshCQ();};
 
@@ -1251,7 +1231,7 @@ function renderKahootOptions(q,chosen,locked){
       btn.addEventListener('click',()=>{
         if(myRole!=='player'||!myKPid)return;
         const idx=parseInt(btn.dataset.idx);
-        const elapsed=lastG?.quizStartTime?Date.now()-lastG.quizStartTime:KQT*1000;
+        const elapsed=lastG?.quizStartTime?nowServer()-lastG.quizStartTime:KQT*1000;
         submitKahootAnswer(idx,elapsed);
       });
     });
@@ -1326,7 +1306,7 @@ async function nextKahootQ(){
     await triggerKahootResult();
   } else {
     _lastKQIdx=-1;
-    await update(rr(roomCode),{currentQ:next,kAnswers:{_:true},quizShowResult:false,quizStartTime:Date.now()});
+    await update(rr(roomCode),{currentQ:next,kAnswers:{_:true},quizShowResult:false,quizStartTime:nowServer()});
   }
 }
 
@@ -1464,8 +1444,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   $('btn-start-custom')?.addEventListener('click',async()=>{
     if(!roomCode||!localCQ.length){toast('❌ ต้องมีอย่างน้อย 1 คำถาม');return;}
-    const pool=[...localCQ].sort(()=>Math.random()-.5).slice(0,20).map(shuffleQuestion);
-    showCountdown(async()=>{await update(rr(roomCode),{phase:'quiz',currentQ:0,quizPool:pool,selectedCat:'custom',selectedLevel:'easy',answers:{_:true},quizStartTime:Date.now(),quizShowResult:false});});
+    const pool=fyShuffle(localCQ).slice(0,20).map(shuffleQuestion);
+    showCountdown(async()=>{await update(rr(roomCode),{phase:'quiz',currentQ:0,quizPool:pool,selectedCat:'custom',selectedLevel:'easy',answers:{_:true},quizStartTime:nowServer(),quizShowResult:false});});
   });
   $('btn-back-cat')?.addEventListener('click',()=>ss('cat-select-screen'));
   // URL auto-join
