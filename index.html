@@ -613,7 +613,13 @@ function syncUI(g){
   }
   const p=g.phase||'lobby';
   const mode=g.mode||'battle';
-  if(p==='lobby'){if(myRole==='host'){ss('host-lobby');renderLobby(g);}else{ss('waiting-screen');renderWaiting(g);}return;}
+  if(p==='lobby'){
+    if(myRole==='host'){
+      if(!g.mode){ss('mode-select');return;}
+      ss('host-lobby');renderLobby(g);
+    }else{ss('waiting-screen');renderWaiting(g);}
+    return;
+  }
   if(p==='cat_select'){ss('cat-select-screen');renderCatSelect(g);return;}
   if(p==='quiz'){
     if(mode==='kahoot'){ss('quiz-screen');renderKahootQuiz(g);return;}
@@ -631,7 +637,7 @@ function syncUI(g){
 async function hostGame(){
   const code=gc();roomCode=code;myRole='host';myTi=null;
   const mk=i=>({name:`ทีม ${i+1}`,color:TC[i],hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:{_:true},quizScore:0,streak:0});
-  await set(rr(code),{phase:'lobby',mode:'battle',currentQ:0,selectedCat:null,selectedLevel:null,selectedQCount:20,answers:{_:true},battleChoices:{_:true},battleRound:0,battlePhase:'choose',teams:{0:mk(0),1:mk(1),2:mk(2),3:mk(3)},kPlayers:{_:true},kScores:{_:true},log:'รอผู้เล่น...',winner:null,createdAt:serverTimestamp()});
+  await set(rr(code),{phase:'lobby',currentQ:0,selectedCat:null,selectedLevel:null,selectedQCount:20,answers:{_:true},battleChoices:{_:true},battleRound:0,battlePhase:'choose',teams:{0:mk(0),1:mk(1),2:mk(2),3:mk(3)},kPlayers:{_:true},kScores:{_:true},log:'รอผู้เล่น...',winner:null,createdAt:serverTimestamp()});
   $('room-code-display').textContent=code;
   genQR(code);
   ss('mode-select');
@@ -664,6 +670,7 @@ async function joinGame(){
     if(!snap.exists()){toast('❌ ไม่พบห้อง');$('loading-overlay').style.display='none';return;}
     const g=snap.val();
     if(g.phase!=='lobby'){toast('❌ เกมเริ่มไปแล้ว');$('loading-overlay').style.display='none';return;}
+    if(!g.mode){toast('❌ โฮสต์ยังไม่ได้เลือกโหมด กรุณารอสักครู่');$('loading-overlay').style.display='none';return;}
     const mode=g.mode||'battle';
     gameMode=mode;
     if(mode==='kahoot'){
