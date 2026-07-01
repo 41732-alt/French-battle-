@@ -64,7 +64,14 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 .k2{background:linear-gradient(135deg,#1e8449,#27ae60);}
 .k3{background:linear-gradient(135deg,#d35400,#e67e22);}
 .opt-btn:disabled{cursor:default;opacity:.75;}
-.correct-ans{outline:4px solid #fff!important;opacity:1!important;}
+.correct-ans{outline:4px solid #fff!important;opacity:1!important;animation:correctGlow .9s ease-out;}
+@keyframes correctGlow{0%{box-shadow:0 0 0 rgba(240,208,96,0)}30%{box-shadow:0 0 26px 8px rgba(240,208,96,.9)}100%{box-shadow:0 0 0 rgba(240,208,96,0)}}
+@keyframes screenShake{0%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}100%{transform:translateX(0)}}
+.shake{animation:screenShake .4s ease-in-out;}
+@keyframes cardPop{0%{transform:scale(1)}40%{transform:scale(1.18) translateY(-6px)}100%{transform:scale(1)}}
+.card-pop{animation:cardPop .35s ease-out;}
+@keyframes wrongPulse{0%{background:rgba(231,76,60,.5)}100%{background:rgba(255,255,255,.06)}}
+.wrong-flash{animation:wrongPulse .6s ease-out;}
 .chosen{outline:3px solid rgba(255,255,255,.8);}
 .result-team-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;gap:6px;flex-wrap:wrap;}
 .shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:580px;}
@@ -93,7 +100,7 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 .target-select{display:none;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
 .target-btn{padding:8px 16px;border-radius:8px;border:2px solid var(--gold);background:rgba(201,162,39,.1);color:var(--gold-light);font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;}
 @keyframes flashDmg{0%{background:rgba(231,76,60,.7);transform:scale(1.05)}50%{background:rgba(231,76,60,.4)}100%{background:rgba(255,255,255,.06);transform:scale(1)}}
-.flash-damage{animation:flashDmg .8s ease-out;}
+.flash-damage{animation:flashDmg .8s ease-out,screenShake .4s ease-in-out;}
 .trophy{font-size:5rem;animation:bounce 1s infinite alternate;}
 @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-12px)}}
 .winner-text{font-family:'Playfair Display',serif;font-size:2rem;font-weight:900;color:var(--gold-light);}
@@ -116,6 +123,7 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 <canvas id="stars-canvas"></canvas>
 <svg class="eiffel-bg" viewBox="0 0 200 400" fill="none"><path d="M100 10L60 150H40L35 170H65L55 250H30L25 270H75L70 380H130L125 270H175L170 250H145L135 170H165L160 150H140Z" fill="white"/><rect x="50" y="148" width="100" height="5" fill="white"/><rect x="30" y="248" width="140" height="5" fill="white"/><rect x="95" y="5" width="10" height="18" fill="white"/></svg>
 <div id="toast"></div>
+<button id="sound-toggle-btn" onclick="toggleSound()" title="เปิด/ปิดเสียง" style="position:fixed;top:14px;right:14px;z-index:9999;background:rgba(0,0,0,.35);border:1px solid rgba(201,162,39,.5);color:#f0d060;border-radius:50%;width:40px;height:40px;font-size:1.1rem;cursor:pointer;">🔊</button>
 <div id="loading-overlay"><div class="spinner"></div><div style="color:var(--gold-light);font-weight:700">กำลังโหลด...</div></div>
 
 <!-- HOME -->
@@ -332,6 +340,17 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
       <select class="cq-input" id="cq-answer"><option value="0">✅ คำตอบ = ตัวเลือก 1</option><option value="1">✅ คำตอบ = ตัวเลือก 2</option><option value="2">✅ คำตอบ = ตัวเลือก 3</option><option value="3">✅ คำตอบ = ตัวเลือก 4</option></select>
       <button class="btn btn-gold" id="btn-add-cq">➕ เพิ่มคำถาม</button>
     </div>
+  </div>
+  <div class="card" style="width:100%;max-width:600px">
+    <div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">📥📤 นำเข้า / ส่งออกคำถาม</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-outline" id="btn-cq-import" style="font-size:.85rem;padding:10px 18px">📥 นำเข้าไฟล์ (CSV/JSON)</button>
+      <button class="btn btn-outline" id="btn-cq-export-json" style="font-size:.85rem;padding:10px 18px">📤 ส่งออก JSON</button>
+      <button class="btn btn-outline" id="btn-cq-export-csv" style="font-size:.85rem;padding:10px 18px">📤 ส่งออก CSV</button>
+      <button class="btn btn-outline" id="btn-cq-template" style="font-size:.85rem;padding:10px 18px">📄 แม่แบบ CSV</button>
+    </div>
+    <input type="file" id="cq-import-file" accept=".csv,.json,application/json,text/csv" style="display:none">
+    <div style="font-size:.72rem;color:#a0b4d6;margin-top:8px">รูปแบบ CSV: question,option1,option2,option3,option4,answer(1-4) · แถวแรกเป็นหัวตาราง</div>
   </div>
   <div class="card" style="width:100%;max-width:600px;max-height:260px;overflow-y:auto">
     <div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">📋 คำถาม (<span id="custom-q-count">0</span> ข้อ)</div>
@@ -566,6 +585,55 @@ let serverOffset=0;
 onValue(ref(db,'.info/serverTimeOffset'),snap=>{serverOffset=snap.val()||0;});
 function nowServer(){return Date.now()+serverOffset;}
 
+// ── SOUND EFFECTS ──
+// สังเคราะห์เสียงเองด้วย Web Audio API (ไม่ต้องโหลดไฟล์เสียงจากภายนอก)
+let _actx=null,soundOn=true;
+try{const s=localStorage.getItem('frBattle_soundOn');if(s==='0')soundOn=false;}catch(e){}
+function _ac(){
+  if(!_actx){try{_actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}}
+  if(_actx.state==='suspended')_actx.resume();
+  return _actx;
+}
+function _tone(freq,dur,type='sine',peak=.22,delay=0){
+  const ac=_ac();if(!ac||!soundOn)return;
+  const t0=ac.currentTime+delay;
+  const osc=ac.createOscillator(),gain=ac.createGain();
+  osc.type=type;osc.frequency.setValueAtTime(freq,t0);
+  gain.gain.setValueAtTime(.0001,t0);
+  gain.gain.exponentialRampToValueAtTime(peak,t0+.01);
+  gain.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  osc.connect(gain);gain.connect(ac.destination);
+  osc.start(t0);osc.stop(t0+dur+.03);
+}
+function _noise(dur,peak=.3,cutoff=500){
+  const ac=_ac();if(!ac||!soundOn)return;
+  const n=Math.max(1,Math.floor(ac.sampleRate*dur));
+  const buf=ac.createBuffer(1,n,ac.sampleRate),data=buf.getChannelData(0);
+  for(let i=0;i<n;i++)data[i]=(Math.random()*2-1)*(1-i/n);
+  const src=ac.createBufferSource();src.buffer=buf;
+  const filt=ac.createBiquadFilter();filt.type='lowpass';filt.frequency.value=cutoff;
+  const gain=ac.createGain();gain.gain.setValueAtTime(peak,ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(.001,ac.currentTime+dur);
+  src.connect(filt);filt.connect(gain);gain.connect(ac.destination);
+  src.start();
+}
+const SFX={
+  correct(){_tone(523.25,.12,'sine',.22,0);_tone(783.99,.2,'sine',.22,.09);},   // 🎵 ติ๊งๆ ตอบถูก
+  wrong(){_tone(220,.3,'sawtooth',.16,0);_tone(174.6,.35,'sawtooth',.14,.05);}, // ตอบผิด
+  attack(){_noise(.28,.35,450);_tone(85,.22,'square',.18,0);},                 // 💥 โจมตี/ระเบิด
+  tick(){_tone(880,.07,'square',.1,0);},                                       // นับถอยหลัง 5 วิสุดท้าย
+  go(){_tone(659.25,.16,'sine',.25,0);},                                       // เริ่ม/GO
+  cardUse(){_tone(440,.09,'triangle',.14,0);},                                 // เลือกการ์ด
+  win(){_tone(523.25,.15,'sine',.22,0);_tone(659.25,.15,'sine',.22,.14);_tone(783.99,.28,'sine',.24,.28);}, // ชนะ
+};
+window.toggleSound=function(){
+  soundOn=!soundOn;
+  try{localStorage.setItem('frBattle_soundOn',soundOn?'1':'0');}catch(e){}
+  const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';
+  if(soundOn)_tone(659.25,.1,'sine',.2,0);
+};
+document.addEventListener('DOMContentLoaded',()=>{const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';});
+
 // ── FISHER-YATES SHUFFLE ──
 // แทนที่ [...arr].sort(()=>Math.random()-.5) ซึ่งเป็นการสุ่มที่มี bias (ไม่กระจายเท่ากันจริง)
 function fyShuffle(arr){
@@ -583,11 +651,13 @@ function toast(m,ms=2500){const t=$('toast');t.innerHTML=m;t.classList.add('show
 function clrTimer(){if(timerIv){clearInterval(timerIv);timerIv=null;}timerOn=false;}
 function startTimer(st,tot,onEnd){
   clrTimer();
+  let _lastTickVal=null;
   function tick(){
     const rem=Math.max(0,tot-(nowServer()-st)/1000),val=Math.ceil(rem);
     const tc=$('timer-count'),tb=$('timer-bar');
     if(tc){tc.textContent=val;tc.style.color=val<=5?'#e74c3c':val<=10?'#f39c12':'#7effc0';}
     if(tb){tb.style.width=`${(rem/tot)*100}%`;tb.style.background=val<=5?'linear-gradient(90deg,#e74c3c,#ff6b6b)':val<=10?'linear-gradient(90deg,#f39c12,#f1c40f)':'linear-gradient(90deg,#c9a227,#f0d060)';}
+    if(val<=5&&val>0&&val!==_lastTickVal){_lastTickVal=val;SFX.tick();}
     if(rem<=0){clrTimer();onEnd();}
   }
   tick();timerIv=setInterval(tick,200);
@@ -844,7 +914,7 @@ function showCountdown(cb){
   document.body.appendChild(ov);
   const ns=['3','2','1','GO!'],cs=['#e74c3c','#f39c12','#27ae60','#f0d060'];
   let i=0;
-  function tick(){ov.innerHTML=`<div style="font-family:'Playfair Display',serif;font-size:6rem;font-weight:900;color:${cs[i]}">${ns[i]}</div>`;i++;if(i<ns.length)setTimeout(tick,900);else setTimeout(()=>{ov.remove();cb();},600);}
+  function tick(){ov.innerHTML=`<div style="font-family:'Playfair Display',serif;font-size:6rem;font-weight:900;color:${cs[i]}">${ns[i]}</div>`;if(ns[i]==='GO!')SFX.go();else SFX.tick();i++;if(i<ns.length)setTimeout(tick,900);else setTimeout(()=>{ov.remove();cb();},600);}
   tick();
 }
 
@@ -918,12 +988,23 @@ async function triggerQR(){
   await update(ref(db),u);
 }
 
+let _soundedResultKey=null;
 function renderQuizResult(g,q){
   const ans=g.answers||{},rew=g.quizRewards||{},teams=g.teams||{};
   $('quiz-result-area').style.display='block';$('answer-feedback').style.display='none';
   const tc=$('timer-count');if(tc)tc.textContent='0';
   const tb=$('timer-bar');if(tb)tb.style.width='0%';
-  $('answer-options').innerHTML=q.opts.map((o,i)=>`<button class="opt-btn k${i} ${i===q.ans?'correct-ans':''}" disabled><span class="kl">${KL[i]}</span> ${o} ${i===q.ans?'✓':''}</button>`).join('');
+  const myKey=`battle-${g.currentQ||0}`;
+  const myAns=myTi!==null?ans[`team${myTi}`]:undefined;
+  const myCorrect=myAns===q.ans;
+  if(myTi!==null&&_soundedResultKey!==myKey){
+    _soundedResultKey=myKey;
+    if(myCorrect)SFX.correct();else if(myAns!==undefined)SFX.wrong();
+  }
+  $('answer-options').innerHTML=q.opts.map((o,i)=>{
+    const isC=i===q.ans,isMyWrong=myTi!==null&&i===myAns&&!myCorrect;
+    return `<button class="opt-btn k${i} ${isC?'correct-ans':''} ${isMyWrong?'wrong-flash':''}" disabled><span class="kl">${KL[i]}</span> ${o} ${isC?'✓':''}</button>`;
+  }).join('');
   $('quiz-result-teams').innerHTML=Object.values(teams).map((t,i)=>{
     if(!getPlayers(t).length)return '';
     const k=`team${i}`,a=ans[k],r=rew[k];
@@ -1028,7 +1109,7 @@ function renderBattle(g){
     const btn=document.createElement('button');
     btn.className=`hand-card ${card.type||'attack'}`;
     btn.innerHTML=`<span style="width:24px;height:24px;display:inline-block">${full.svg||card.icon||'?'}</span>${card.name||''}`;
-    btn.onclick=()=>chooseCard(card,i,g);hd.appendChild(btn);
+    btn.onclick=()=>{btn.classList.add('card-pop');SFX.cardUse();chooseCard(card,i,g);};hd.appendChild(btn);
   });
 }
 
@@ -1100,13 +1181,18 @@ async function resolveBattle(){
   await update(ref(db),u);
 }
 
+let _soundedBattleRound=null;
 function renderBR(g){
   const logs=g.battleResolveLog||[],dmg=g.battleDmgTaken||{};
   $('battle-resolve-log').innerHTML=logs.map(l=>`<div style="margin-bottom:4px;padding:4px 8px;background:rgba(255,255,255,.05);border-radius:6px">${l}</div>`).join('');
+  const rKey=g.battleRound||0;
+  const isNewRound=_soundedBattleRound!==rKey;
+  if(isNewRound)_soundedBattleRound=rKey;
   Object.keys(dmg).forEach(i=>{
     setTimeout(()=>{
       const el=document.getElementById(`bteam-${i}`);
       if(el){el.classList.add('flash-damage');setTimeout(()=>el.classList.remove('flash-damage'),900);}
+      if(isNewRound)SFX.attack();
       const hn=document.getElementById(`hpnum-${i}`);
       const old=(g.teams?.[i]?.hp||0)+(dmg[i]||0),nw=g.teams?.[i]?.hp||0;
       if(hn){let v=old;const iv=setInterval(()=>{v=Math.max(nw,v-1);hn.textContent=v;if(v<=nw)clearInterval(iv);},80);}
@@ -1129,7 +1215,10 @@ async function triggerResult(g){
 }
 
 // ── RESULT ──
+let _prevWinnerVal=undefined;
 function renderResult(g){
+  if(g.winner&&g.winner!==_prevWinnerVal)SFX.win();
+  _prevWinnerVal=g.winner;
   $('winner-text').textContent=`🎉 ${g.winner} ชนะ!`;
   const teams=Object.values(g.teams||{});
   const sorted=[...teams].sort((a,b)=>(b.hp||0)-(a.hp||0));
@@ -1142,6 +1231,7 @@ function renderResult(g){
 }
 
 async function playAgain(){
+  _prevWinnerVal=undefined;
   const teams={};
   Object.values(lastG?.teams||{}).forEach((t,i)=>{
     teams[i]={...t,hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:t.players||{_:true},quizScore:0,streak:0};
@@ -1183,6 +1273,106 @@ function refreshCQ(){
   saveCQ();
 }
 window.rmCQ=function(i){localCQ.splice(i,1);refreshCQ();};
+
+// ── IMPORT / EXPORT คำถามกำหนดเอง (CSV / JSON) ──
+function _downloadBlob(content,filename,mime){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportCQJSON(){
+  if(!localCQ.length){toast('❌ ยังไม่มีคำถามให้ส่งออก');return;}
+  _downloadBlob(JSON.stringify(localCQ,null,2),'custom-questions.json','application/json');
+  toast(`✅ ส่งออก ${localCQ.length} ข้อ (JSON) แล้ว`);
+}
+function _csvEscape(v){
+  const s=String(v??'');
+  return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function exportCQCSV(){
+  if(!localCQ.length){toast('❌ ยังไม่มีคำถามให้ส่งออก');return;}
+  const rows=[['question','option1','option2','option3','option4','answer']];
+  localCQ.forEach(q=>rows.push([q.q,q.opts[0],q.opts[1],q.opts[2],q.opts[3],(q.ans||0)+1]));
+  const csv=rows.map(r=>r.map(_csvEscape).join(',')).join('\n');
+  _downloadBlob('\uFEFF'+csv,'custom-questions.csv','text/csv;charset=utf-8');
+  toast(`✅ ส่งออก ${localCQ.length} ข้อ (CSV) แล้ว`);
+}
+function downloadCQTemplate(){
+  const rows=[
+    ['question','option1','option2','option3','option4','answer'],
+    ['Bonjour แปลว่าอะไร?','สวัสดี','ขอบคุณ','ลาก่อน','โปรดทราบ','1'],
+    ['Merci แปลว่าอะไร?','ขอโทษ','ขอบคุณ','ใช่','ไม่','2'],
+  ];
+  const csv=rows.map(r=>r.map(_csvEscape).join(',')).join('\n');
+  _downloadBlob('\uFEFF'+csv,'question-template.csv','text/csv;charset=utf-8');
+}
+// CSV parser เล็กๆ รองรับค่าที่ครอบด้วย " และมี , หรือ \n อยู่ข้างในเซลล์
+function _parseCSV(text){
+  const rows=[];let row=[],cell='',inQ=false;
+  const t=text.replace(/^\uFEFF/,'');
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(inQ){
+      if(c==='"'){ if(t[i+1]==='"'){cell+='"';i++;} else inQ=false; }
+      else cell+=c;
+    }else{
+      if(c==='"')inQ=true;
+      else if(c===','){row.push(cell);cell='';}
+      else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell='';}
+      else if(c==='\r'){/* skip */}
+      else cell+=c;
+    }
+  }
+  if(cell.length||row.length){row.push(cell);rows.push(row);}
+  return rows.filter(r=>r.some(c=>c.trim()!==''));
+}
+function _importQuestionsFromCSV(text){
+  const rows=_parseCSV(text);
+  if(!rows.length)return [];
+  let start=0;
+  // ข้ามแถวหัวตารางถ้าตรวจพบ
+  if(/question/i.test(rows[0][0]||''))start=1;
+  const out=[];
+  for(let i=start;i<rows.length;i++){
+    const r=rows[i];if(r.length<6)continue;
+    const [q,o1,o2,o3,o4,ansRaw]=r;
+    let ans=parseInt(ansRaw,10);
+    if(isNaN(ans))continue;
+    ans=ans>=1&&ans<=4?ans-1:ans; // รองรับทั้ง 1-4 และ 0-3
+    if(ans<0||ans>3)continue;
+    if(!q||!o1||!o2||!o3||!o4)continue;
+    out.push({q:q.trim(),opts:[o1,o2,o3,o4].map(x=>x.trim()),ans});
+  }
+  return out;
+}
+function _importQuestionsFromJSON(text){
+  const data=JSON.parse(text);
+  const arr=Array.isArray(data)?data:(Array.isArray(data?.questions)?data.questions:[]);
+  return arr.filter(q=>q&&q.q&&Array.isArray(q.opts)&&q.opts.length===4&&typeof q.ans==='number'&&q.ans>=0&&q.ans<=3)
+    .map(q=>({q:String(q.q),opts:q.opts.map(String),ans:q.ans}));
+}
+function handleCQImport(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const text=String(reader.result);
+      let imported=[];
+      if(/\.json$/i.test(file.name)||text.trim().startsWith('[')||text.trim().startsWith('{')){
+        imported=_importQuestionsFromJSON(text);
+      }else{
+        imported=_importQuestionsFromCSV(text);
+      }
+      if(!imported.length){toast('❌ ไม่พบคำถามที่ถูกต้องในไฟล์');return;}
+      localCQ=localCQ.concat(imported);
+      refreshCQ();
+      toast(`✅ นำเข้า ${imported.length} ข้อสำเร็จ!`);
+    }catch(e){toast('❌ ไฟล์ไม่ถูกต้อง: '+e.message);}
+  };
+  reader.readAsText(file,'UTF-8');
+}
 
 // ══════════════════════════════════════════════
 // KAHOOT MODE FUNCTIONS
@@ -1271,13 +1461,23 @@ async function submitKahootAnswer(chosenIdx,elapsedMs){
   }
 }
 
+let _soundedKahootKey=null;
 function showKahootQuizResult(g,q,qi){
-  $('answer-options').querySelectorAll('.opt-btn').forEach((btn,i)=>{btn.disabled=true;if(i===q?.ans)btn.classList.add('correct-ans');});
+  const myAns=myKPid?g.kAnswers?.[myKPid]:null;
+  $('answer-options').querySelectorAll('.opt-btn').forEach((btn,i)=>{
+    btn.disabled=true;
+    if(i===q?.ans)btn.classList.add('correct-ans');
+    else if(myAns&&i===myAns.chosen&&!myAns.correct)btn.classList.add('wrong-flash');
+  });
   $('quiz-result-area').style.display='block';
   $('battle-quiz-result-header').style.display='none';
   $('kahoot-quiz-result-header').style.display='block';
+  const kKey=`kahoot-${qi}`;
+  if(myRole!=='host'&&_soundedKahootKey!==kKey){
+    _soundedKahootKey=kKey;
+    if(myAns?.correct)SFX.correct();else if(myAns)SFX.wrong();
+  }
   // my result
-  const myAns=myKPid?g.kAnswers?.[myKPid]:null;
   const mr=$('kahoot-my-result');
   if(mr){
     if(myRole==='host')mr.textContent='';
@@ -1329,8 +1529,12 @@ async function triggerKahootResult(){
   await update(rr(roomCode),{phase:'result',winner,kRanked:ranked.slice(0,40)});
 }
 
+let _prevKWinnerVal=undefined;
 function renderKahootResult(g){
   const ranked=g.kRanked||[];
+  const wKey=ranked[0]?.name;
+  if(wKey&&wKey!==_prevKWinnerVal)SFX.win();
+  _prevKWinnerVal=wKey;
   $('kahoot-winner-text').innerHTML=ranked[0]
     ?`🥇 ${ranked[0].name} ชนะ!<br><span style="font-size:1rem;color:#a0b4d6">${(ranked[0].score||0).toLocaleString()} คะแนน</span>`
     :'ไม่มีผู้ชนะ';
@@ -1358,6 +1562,7 @@ function renderKahootResult(g){
 
 async function kahootPlayAgain(){
   if(!roomCode||myRole!=='host')return;
+  _prevKWinnerVal=undefined;
   _lastKQIdx=-1;
   await update(rr(roomCode),{phase:'cat_select',currentQ:0,kAnswers:{_:true},kScores:{_:true},quizShowResult:false,winner:null,kRanked:null,selectedCat:null,selectedLevel:null});
   const cg=$('cat-grid');if(cg)delete cg.dataset.built;
@@ -1416,6 +1621,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   [10,15,20].forEach(n=>{$(`qc${n}`)?.addEventListener('click',async()=>{if(myRole==='host'&&roomCode)await update(rr(roomCode),{selectedQCount:n});});});
   $('start-quiz-btn')?.addEventListener('click',startQuiz);
   $('btn-custom-q')?.addEventListener('click',()=>{ss('custom-q-screen');refreshCQ();});
+  $('btn-cq-import')?.addEventListener('click',()=>$('cq-import-file')?.click());
+  $('cq-import-file')?.addEventListener('change',(e)=>{const f=e.target.files?.[0];if(f)handleCQImport(f);e.target.value='';});
+  $('btn-cq-export-json')?.addEventListener('click',exportCQJSON);
+  $('btn-cq-export-csv')?.addEventListener('click',exportCQCSV);
+  $('btn-cq-template')?.addEventListener('click',downloadCQTemplate);
   // Quiz — route nextQ by mode
   $('host-next-btn')?.addEventListener('click',()=>{
     const mode=lastG?.mode||'battle';
