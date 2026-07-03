@@ -31,6 +31,9 @@ input:focus{outline:none;border-color:var(--gold);}
 input::placeholder{color:rgba(255,255,255,.35);}
 select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px 14px;color:#fff;font-family:'Sarabun',sans-serif;font-size:1rem;width:100%;}
 .join-form{display:flex;flex-direction:column;gap:12px;width:100%;max-width:380px;}
+.avatar-btn{font-size:1.6rem;padding:8px 12px;border-radius:12px;border:2px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);cursor:pointer;transition:all .2s;}
+.avatar-btn:hover{transform:translateY(-2px);}
+.avatar-btn.avatar-selected{border-color:var(--gold);background:rgba(201,162,39,.25);outline:2px solid var(--gold-light);}
 .lobby-team-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;gap:8px;flex-wrap:wrap;}
 .room-code-big{font-family:'Playfair Display',serif;font-size:3rem;font-weight:900;color:var(--gold-light);letter-spacing:8px;text-align:center;}
 .kick-btn{padding:4px 10px;border:1px solid #e74c3c;background:rgba(231,76,60,.15);color:#ff8e86;border-radius:6px;cursor:pointer;font-family:'Sarabun',sans-serif;font-size:.78rem;font-weight:700;}
@@ -167,6 +170,10 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
   <div class="join-form card">
     <input type="text" id="join-code" placeholder="Room Code" maxlength="6" style="text-transform:uppercase;letter-spacing:4px;font-size:1.2rem;text-align:center">
     <input type="text" id="join-name" placeholder="ชื่อของคุณ" maxlength="16">
+    <div>
+      <div style="font-size:.8rem;color:#a0b4d6;margin-bottom:6px;text-align:center">เลือกตัวละคร/รูปโปรไฟล์:</div>
+      <div id="avatar-picker" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"></div>
+    </div>
     <select id="join-team"><option value="0">🔴 ทีม 1</option><option value="1">🔵 ทีม 2</option><option value="2">🟢 ทีม 3</option><option value="3">🟡 ทีม 4</option></select>
     <button class="btn btn-gold" id="btn-do-join">เข้าร่วม →</button>
   </div>
@@ -234,6 +241,12 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     <button id="qc10" class="qcount-btn">10 ข้อ</button>
     <button id="qc15" class="qcount-btn">15 ข้อ</button>
     <button id="qc20" class="qcount-btn qcount-selected">20 ข้อ</button>
+  </div>
+  <div style="font-size:.8rem;color:#a0b4d6;text-align:center">⏱️ เวลาต่อข้อ:</div>
+  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <button id="qt10" class="qcount-btn">10 วินาที</button>
+    <button id="qt15" class="qcount-btn qcount-selected">15 วินาที</button>
+    <button id="qt30" class="qcount-btn">30 วินาที</button>
   </div>
   <div id="cat-select-info" style="font-size:.9rem;color:#a0b4d6;text-align:center"></div>
   <button id="start-quiz-btn" class="btn btn-gold" style="display:none">▶ เริ่มเกม!</button>
@@ -656,6 +669,23 @@ const TC=["#e74c3c","#3498db","#2ecc71","#f39c12"];
 const TE=["🔴","🔵","🟢","🟡"];
 const MAX_HP=10,QT=15,BT=30,MC=5;
 
+// ── AVATAR / PROFILE PICKER ──
+const AVATARS=['🗼','🧑‍🎓','🧙','🥷','🦊','🤖'];
+let selectedAvatar=AVATARS[0];
+function renderAvatarPicker(){
+  const el=$('avatar-picker');if(!el)return;
+  el.innerHTML=AVATARS.map(a=>`<button type="button" class="avatar-btn${a===selectedAvatar?' avatar-selected':''}" data-av="${a}">${a}</button>`).join('');
+  el.querySelectorAll('.avatar-btn').forEach(b=>{
+    b.addEventListener('click',()=>{selectedAvatar=b.dataset.av;renderAvatarPicker();});
+  });
+}
+function stripAvatar(n){
+  if(typeof n!=='string')return n;
+  const sp=n.indexOf(' ');
+  if(sp>0&&AVATARS.includes(n.slice(0,sp)))return n.slice(sp+1);
+  return n;
+}
+
 let myRole=null,myTi=null,roomCode=null,dbRef=null,lastG=null;
 let gameMode=null; // 'battle' | 'kahoot'
 let myKPid=null,myKName=null; // Kahoot player identity
@@ -722,7 +752,7 @@ window.toggleSound=function(){
   const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';
   if(soundOn)_tone(659.25,.1,'sine',.2,0);
 };
-document.addEventListener('DOMContentLoaded',()=>{const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';});
+document.addEventListener('DOMContentLoaded',()=>{const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';renderAvatarPicker();});
 
 // ── FISHER-YATES SHUFFLE ──
 // แทนที่ [...arr].sort(()=>Math.random()-.5) ซึ่งเป็นการสุ่มที่มี bias (ไม่กระจายเท่ากันจริง)
@@ -797,7 +827,7 @@ function syncUI(g){
 async function hostGame(){
   const code=gc();roomCode=code;myRole='host';myTi=null;
   const mk=i=>({name:`ทีม ${i+1}`,color:TC[i],hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:{_:true},quizScore:0,streak:0});
-  await set(rr(code),{phase:'lobby',currentQ:0,selectedCat:null,selectedLevel:null,selectedQCount:20,answers:{_:true},battleChoices:{_:true},battleRound:0,battlePhase:'choose',teams:{0:mk(0),1:mk(1),2:mk(2),3:mk(3)},kPlayers:{_:true},kScores:{_:true},log:'รอผู้เล่น...',winner:null,createdAt:serverTimestamp()});
+  await set(rr(code),{phase:'lobby',currentQ:0,selectedCat:null,selectedLevel:null,selectedQCount:20,answers:{_:true},battleChoices:{_:true},battleRound:0,battlePhase:'choose',teams:{0:mk(0),1:mk(1),2:mk(2),3:mk(3)},kPlayers:{_:true},kScores:{_:true},log:'รอผู้เล่น...',winner:null,winnerIsTie:false,timerPerQuestion:15,createdAt:serverTimestamp()});
   $('room-code-display').textContent=code;
   genQR(code);
   ss('mode-select');
@@ -824,6 +854,7 @@ async function joinGame(){
   const code=$('join-code').value.trim().toUpperCase();
   const name=$('join-name').value.trim();
   if(!code||!name){toast('❌ กรอกข้อมูลด้วยนะ');return;}
+  const displayName=`${selectedAvatar} ${name}`;
   $('loading-overlay').style.display='flex';
   try{
     const snap=await get(rr(code));
@@ -837,10 +868,10 @@ async function joinGame(){
       // Kahoot solo join
       const pCount=Object.values(g.kPlayers||{}).filter(v=>v&&v!==true&&!v.kicked).length;
       if(pCount>=40){toast('❌ ห้องเต็มแล้ว (40/40)');$('loading-overlay').style.display='none';return;}
-      const names=Object.values(g.kPlayers||{}).filter(v=>v&&v!==true).map(p=>p.name||'');
+      const names=Object.values(g.kPlayers||{}).filter(v=>v&&v!==true).map(p=>stripAvatar(p.name||''));
       if(names.includes(name)){toast('❌ ชื่อนี้มีอยู่แล้ว');$('loading-overlay').style.display='none';return;}
       const pid='kp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-      await update(ref(db,`rooms/${code}/kPlayers/${pid}`),{name,score:0,kicked:false});
+      await update(ref(db,`rooms/${code}/kPlayers/${pid}`),{name:displayName,score:0,kicked:false});
       roomCode=code;myRole='player';myTi=null;myKPid=pid;myKName=name;
       $('waiting-code').textContent=code;
       ss('waiting-screen');listenRoom(code);
@@ -856,7 +887,7 @@ async function joinGame(){
       const txResult=await runTransaction(teamRef,(team)=>{
         const existing=gp(team||{});
         if(existing.length>=2){full=true;return; } // abort — ไม่มีการเขียนใดๆ
-        existing.push(name);
+        existing.push(displayName);
         const pObj={_:true};existing.forEach((n,i)=>pObj[`p${i}`]=n);
         return {...(team||{}),players:pObj,kicked:false};
       });
@@ -991,9 +1022,11 @@ function renderCatSelect(g){
     $('btn-hard').className=`level-btn ${lv==='hard'?'hard-sel':'hard-btn'}`;
   }else ld.style.display='none';
   const avail=sel&&lv?(QUESTION_BANK[sel][lv]||[]).length:20;
-  [10,15,20].forEach(n=>{const b=$(`qc${n}`);if(!b)return;const ok=n<=avail;b.disabled=!ok;b.style.opacity=ok?'1':'.35';b.style.cursor=ok?'pointer':'not-allowed';b.className='qcount-btn'+(qc===n&&ok?' qcount-selected':'');});
+  [10,15,20].forEach(n=>{const b=$(`qc${n}`);if(!b)return;const ok=n<=avail;b.disabled=!ok||!isH;b.style.opacity=ok?'1':'.35';b.style.cursor=(ok&&isH)?'pointer':'not-allowed';b.className='qcount-btn'+(qc===n&&ok?' qcount-selected':'');});
+  const qTime=g.timerPerQuestion||15;
+  [10,15,30].forEach(n=>{const b=$(`qt${n}`);if(!b)return;b.disabled=!isH;b.style.cursor=isH?'pointer':'not-allowed';b.className='qcount-btn'+(qTime===n?' qcount-selected':'');});
   $('start-quiz-btn').style.display=isH&&sel&&lv?'inline-block':'none';
-  $('cat-select-info').textContent=!isH?'⏳ รอครูเลือก...':(sel&&lv?`✅ ${QUESTION_BANK[sel].label} ${lv==='easy'?'ง่าย':'ยาก'} ${Math.min(qc,avail)}ข้อ`:'');
+  $('cat-select-info').textContent=!isH?'⏳ รอครูเลือก...':(sel&&lv?`✅ ${QUESTION_BANK[sel].label} ${lv==='easy'?'ง่าย':'ยาก'} ${Math.min(qc,avail)}ข้อ · ⏱️${qTime}วิ/ข้อ`:'');
 }
 
 window.selCat=async function(k){if(!roomCode)return;await update(rr(roomCode),{selectedCat:k,selectedLevel:null});};
@@ -1032,12 +1065,16 @@ function renderQuiz(g){
   const activeN=activeTeamIdx(g.teams||{}).length||1;
   const ac=$('answered-count');if(ac)ac.textContent=`✅ ตอบแล้ว ${Object.keys(ans).filter(k=>k!=='_').length}/${activeN} ทีม`;
   if(g.quizShowResult){clrTimer();renderQuizResult(g,q);return;}
-  if(g.quizStartTime&&!timerOn){timerOn=true;startTimer(g.quizStartTime,QT,()=>{if(myRole==='host'&&lastG&&!lastG.quizShowResult)triggerQR();});}
+  const qTimerSec=g.timerPerQuestion||QT;
+  if(g.quizStartTime&&!timerOn){timerOn=true;startTimer(g.quizStartTime,qTimerSec,()=>{if(myRole==='host'&&lastG&&!lastG.quizShowResult)triggerQR();});}
   const opts=$('answer-options');if(!opts)return;
+  // ── SYNCED REVEAL: เมื่อทุกทีมที่ยังอยู่ในเกมตอบครบแล้ว ให้เฉลยพร้อมกันทันที ไม่ต้องรอหมดเวลา ──
+  const answeredN=Object.keys(ans).filter(k=>k!=='_').length;
+  if(myRole==='host'&&!g.quizShowResult&&activeN>0&&answeredN>=activeN){triggerQR();return;}
   if(answered||myRole==='host'){
     const ch=mk?ans[mk]:null;
     opts.innerHTML=q.opts.map((o,i)=>`<button class="opt-btn k${i} ${ch===i?'chosen':''}" disabled><span class="kl">${KL[i]}</span> ${o}</button>`).join('');
-    const fb=$('answer-feedback');if(fb){fb.style.display='block';fb.textContent=myRole==='host'?'👀 รอนักเรียน...':'⏳ รอทีมอื่น...';}
+    const fb=$('answer-feedback');if(fb){fb.style.display='block';fb.textContent=myRole==='host'?'👀 รอนักเรียน...':'📝 บันทึกคำตอบแล้ว รอผู้เล่นคนอื่น...';}
   }else{
     opts.innerHTML=q.opts.map((o,i)=>`<button class="opt-btn k${i}" onclick="subAns(${i})"><span class="kl">${KL[i]}</span> ${o}</button>`).join('');
     const fb=$('answer-feedback');if(fb)fb.style.display='none';
@@ -1051,7 +1088,7 @@ window.subAns=async function(chosen){
   const ans=lastG.answers||{};
   if(ans[mk]!==undefined)return;
   document.querySelectorAll('.opt-btn').forEach((b,i)=>{b.disabled=true;if(i===chosen)b.classList.add('chosen');});
-  const fb=$('answer-feedback');if(fb){fb.style.display='block';fb.textContent='✅ ส่งแล้ว!';}
+  const fb=$('answer-feedback');if(fb){fb.style.display='block';fb.textContent='📝 บันทึกคำตอบแล้ว รอผู้เล่นคนอื่น...';}
   const u={};u[`rooms/${roomCode}/answers/${mk}`]=chosen;
   await update(ref(db),u);
 };
@@ -1160,18 +1197,36 @@ async function shopNext(){
 }
 
 // ── BATTLE ──
+// ทีมที่ "มีอยู่จริง" คือทีมที่มีผู้เล่นอย่างน้อย 1 คน — ทีมว่างเปล่าจะไม่ถูกนับ ไม่แสดงผล
+// และไม่มีผลต่อเงื่อนไขจบเกม/ผู้ชนะ
+function activePlayerTeams(teams){
+  return Object.entries(teams||{}).filter(([i,t])=>getPlayers(t).length>0).map(([i,t])=>({idx:+i,t}));
+}
+// คำนวณผู้ชนะจากทีมที่ "เหลืออยู่" (มีผู้เล่นจริง) โดยเทียบ HP สูงสุด — ถ้า HP เท่ากันหลายทีมให้ถือว่าเสมอ
+function computeBattleWinner(teams){
+  const active=activePlayerTeams(teams);
+  if(!active.length)return{text:'?',isTie:false};
+  const alive=active.filter(({t})=>!t.eliminated&&(t.hp||0)>0);
+  const pool=alive.length?alive:active;
+  const maxHp=Math.max(...pool.map(({t})=>t.hp||0));
+  const top=pool.filter(({t})=>(t.hp||0)===maxHp);
+  if(top.length===1)return{text:top[0].t.name,isTie:false};
+  return{text:top.map(({t})=>t.name).join(' & '),isTie:true};
+}
+
 function renderBattle(g){
   const teams=g.teams||{};
-  const alive=Object.values(teams).filter(t=>!t.eliminated&&(t.hp||0)>0);
+  const activeTeams=activePlayerTeams(teams);
+  const alive=activeTeams.filter(({t})=>!t.eliminated&&(t.hp||0)>0);
   if(alive.length<=1){if(myRole==='host')triggerResult(g);return;}
   const choices=g.battleChoices||{};
   const myT=myTi!==null?teams[myTi]:null;
   const iChose=myTi!==null&&choices[`team${myTi}`]!==undefined;
-  const chosenCount=Object.values(teams).filter((t,i)=>!t.eliminated&&(t.hp||0)>0&&choices[`team${i}`]!==undefined).length;
+  const chosenCount=alive.filter(({idx})=>choices[`team${idx}`]!==undefined).length;
   $('battle-turn-label').textContent=`⚔️ รอบที่ ${(g.battleRound||0)+1}`;
   $('battle-chosen-count').textContent=`✅ เลือกแล้ว ${chosenCount}/${alive.length} ทีม`;
   $('battle-teams-display').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">`+
-    Object.values(teams).map((t,i)=>{
+    activeTeams.map(({idx:i,t})=>{
       const dead=(t.hp||0)<=0,chose=choices[`team${i}`]!==undefined,p=getPlayers(t);
       return `<div class="battle-team" id="bteam-${i}" style="border:2px solid ${dead?'rgba(255,255,255,.1)':TC[i]};${dead?'opacity:.35':''}">
         <div style="font-weight:700;font-size:.9rem;color:${TC[i]};margin-bottom:4px">${TE[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${dead?' 💀':''}</div>
@@ -1211,7 +1266,7 @@ function showTargetPick(card,ci,g){
   const ts=$('target-select');ts.style.display='flex';
   ts.innerHTML='<div style="width:100%;color:#a0b4d6;font-size:.85rem;text-align:center;margin-bottom:6px">🎯 เลือกเป้าหมาย:</div>';
   Object.values(g.teams||{}).forEach((t,i)=>{
-    if(i===myTi||(t.hp||0)<=0)return;
+    if(i===myTi||(t.hp||0)<=0||getPlayers(t).length===0)return;
     const btn=document.createElement('button');btn.className='target-btn';
     btn.textContent=`${TE[i]} ${t.name||'ทีม '+(i+1)} ❤️${t.hp}`;
     btn.onclick=()=>{ts.style.display='none';subChoice({cardId:card.id,cardIdx:ci,targetIdx:i});};
@@ -1261,13 +1316,22 @@ async function resolveBattle(){
   Object.keys(dmgTaken).forEach(i=>{teams[i].hp=Math.max(0,(teams[i].hp||0)-dmgTaken[i]);if(teams[i].hp<=0){teams[i].eliminated=true;logs.push(`💀 ${teams[i].name} แพ้!`);}});
   if(!logs.length)logs.push('— ไม่มีการกระทำ —');
   teams.forEach(t=>{const co={_:true};t.cards.forEach((c,j)=>co[`c${j}`]=c);t.cards=co;});
-  const alive=teams.filter(t=>!t.eliminated&&(t.hp||0)>0);
+  const teamsObj={};teams.forEach((t,i)=>teamsObj[i]=t);
+  // ทีมที่ "เหลืออยู่จริง" = มีผู้เล่น + ยังไม่แพ้ + HP>0
+  const activeAlive=teams.map((t,i)=>({idx:i,t})).filter(({t})=>getPlayers(t).length>0&&!t.eliminated&&(t.hp||0)>0);
+  // เงื่อนไขจบเกม (การ์ดหมดกอง): ถ้าทีมที่เหลืออยู่ทุกทีมไม่มีการ์ดเหลือให้เล่นแล้ว ให้จบเกมทันที
+  const allOutOfCards=activeAlive.length>0&&activeAlive.every(({t})=>toA(t.cards).length===0);
   const u={};teams.forEach((t,i)=>u[`rooms/${roomCode}/teams/${i}`]=t);
   u[`rooms/${roomCode}/log`]=logs[logs.length-1];
   u[`rooms/${roomCode}/battlePhase`]='resolving';
   u[`rooms/${roomCode}/battleResolveLog`]=logs;
   u[`rooms/${roomCode}/battleDmgTaken`]=dmgTaken;
-  if(alive.length<=1){u[`rooms/${roomCode}/phase`]='result';u[`rooms/${roomCode}/winner`]=alive.length===1?alive[0].name:[...teams].sort((a,b)=>(b.hp||0)-(a.hp||0))[0]?.name||'?';}
+  if(activeAlive.length<=1||allOutOfCards){
+    const w=computeBattleWinner(teamsObj);
+    u[`rooms/${roomCode}/phase`]='result';
+    u[`rooms/${roomCode}/winner`]=w.text;
+    u[`rooms/${roomCode}/winnerIsTie`]=w.isTie;
+  }
   await update(ref(db),u);
 }
 
@@ -1294,14 +1358,15 @@ function renderBR(g){
 
 async function nextBattleRound(){
   if(!lastG||!roomCode)return;
-  const alive=Object.values(lastG.teams||{}).filter(t=>!t.eliminated&&(t.hp||0)>0);
-  if(alive.length<=1){await triggerResult(lastG);return;}
+  const active=activePlayerTeams(lastG.teams||{});
+  const alive=active.filter(({t})=>!t.eliminated&&(t.hp||0)>0);
+  const allOutOfCards=alive.length>0&&alive.every(({t})=>toA(t.cards).length===0);
+  if(alive.length<=1||allOutOfCards){await triggerResult(lastG);return;}
   await update(rr(roomCode),{battleRound:(lastG.battleRound||0)+1,battleChoices:{_:true},battlePhase:'choose',battleStartTime:nowServer(),log:'รอบใหม่!'});
 }
 async function triggerResult(g){
-  const alive=Object.values(g.teams||{}).filter(t=>!t.eliminated&&(t.hp||0)>0);
-  const w=alive.length===1?alive[0].name:[...Object.values(g.teams||{})].sort((a,b)=>(b.hp||0)-(a.hp||0))[0]?.name||'?';
-  await update(rr(roomCode),{phase:'result',winner:w});
+  const w=computeBattleWinner(g.teams||{});
+  await update(rr(roomCode),{phase:'result',winner:w.text,winnerIsTie:w.isTie});
 }
 
 // ── RESULT ──
@@ -1309,7 +1374,7 @@ let _prevWinnerVal=undefined;
 function renderResult(g){
   if(g.winner&&g.winner!==_prevWinnerVal)SFX.win();
   _prevWinnerVal=g.winner;
-  $('winner-text').textContent=`🎉 ${g.winner} ชนะ!`;
+  $('winner-text').textContent=g.winnerIsTie?`🤝 เสมอ! ${g.winner}`:`🎉 ${g.winner} ชนะ!`;
   const teams=Object.values(g.teams||{});
   const sorted=[...teams].sort((a,b)=>(b.hp||0)-(a.hp||0));
   const mvp=[...teams].sort((a,b)=>(b.quizScore||0)-(a.quizScore||0))[0];
@@ -1326,7 +1391,7 @@ async function playAgain(){
   Object.values(lastG?.teams||{}).forEach((t,i)=>{
     teams[i]={...t,hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:t.players||{_:true},quizScore:0,streak:0};
   });
-  await update(rr(roomCode),{phase:'lobby',currentQ:0,answers:{_:true},battleRound:0,battleChoices:{_:true},battlePhase:'choose',winner:null,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
+  await update(rr(roomCode),{phase:'lobby',currentQ:0,answers:{_:true},battleRound:0,battleChoices:{_:true},battlePhase:'choose',winner:null,winnerIsTie:false,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
 }
 
 function exportPDF(g){
@@ -1711,6 +1776,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('btn-easy')?.addEventListener('click',async()=>{if(myRole==='host'&&roomCode)await update(rr(roomCode),{selectedLevel:'easy'});});
   $('btn-hard')?.addEventListener('click',async()=>{if(myRole==='host'&&roomCode)await update(rr(roomCode),{selectedLevel:'hard'});});
   [10,15,20].forEach(n=>{$(`qc${n}`)?.addEventListener('click',async()=>{if(myRole==='host'&&roomCode)await update(rr(roomCode),{selectedQCount:n});});});
+  [10,15,30].forEach(n=>{$(`qt${n}`)?.addEventListener('click',async()=>{if(myRole==='host'&&roomCode)await update(rr(roomCode),{timerPerQuestion:n});});});
   $('start-quiz-btn')?.addEventListener('click',startQuiz);
   $('btn-custom-q')?.addEventListener('click',()=>{ss('custom-q-screen');refreshCQ();});
   $('btn-cq-import')?.addEventListener('click',()=>$('cq-import-file')?.click());
