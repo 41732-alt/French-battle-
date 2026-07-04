@@ -34,6 +34,8 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 .avatar-btn{font-size:1.6rem;padding:8px 12px;border-radius:12px;border:2px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);cursor:pointer;transition:all .2s;}
 .avatar-btn:hover{transform:translateY(-2px);}
 .avatar-btn.avatar-selected{border-color:var(--gold);background:rgba(201,162,39,.25);outline:2px solid var(--gold-light);}
+.avatar-chip{border-radius:50%;object-fit:cover;vertical-align:middle;border:1px solid rgba(255,255,255,.35);display:inline-block;flex-shrink:0;}
+.avatar-upload-btn{display:inline-block;padding:8px 18px;font-size:.85rem;cursor:pointer;}
 .lobby-team-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;gap:8px;flex-wrap:wrap;}
 .room-code-big{font-family:'Playfair Display',serif;font-size:3rem;font-weight:900;color:var(--gold-light);letter-spacing:8px;text-align:center;}
 .kick-btn{padding:4px 10px;border:1px solid #e74c3c;background:rgba(231,76,60,.15);color:#ff8e86;border-radius:6px;cursor:pointer;font-family:'Sarabun',sans-serif;font-size:.78rem;font-weight:700;}
@@ -173,6 +175,14 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     <div>
       <div style="font-size:.8rem;color:#a0b4d6;margin-bottom:6px;text-align:center">เลือกตัวละคร/รูปโปรไฟล์:</div>
       <div id="avatar-picker" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"></div>
+      <div style="text-align:center;margin-top:10px">
+        <label for="avatar-upload-input" class="btn btn-outline avatar-upload-btn">📷 อัปโหลดรูปโปรไฟล์เอง (ไม่บังคับ)</label>
+        <input type="file" accept="image/*" id="avatar-upload-input" style="display:none">
+      </div>
+      <div id="avatar-upload-preview" style="display:none;text-align:center;margin-top:10px">
+        <img id="avatar-upload-img" class="avatar-chip" style="width:64px;height:64px;border-width:2px;border-color:var(--gold)">
+        <div><button type="button" class="btn btn-outline" id="avatar-upload-clear" style="margin-top:6px;padding:4px 14px;font-size:.75rem">✕ ลบรูป ใช้ Emoji แทน</button></div>
+      </div>
     </div>
     <select id="join-team"><option value="0">🔴 ทีม 1</option><option value="1">🔵 ทีม 2</option><option value="2">🟢 ทีม 3</option><option value="3">🟡 ทีม 4</option></select>
     <button class="btn btn-gold" id="btn-do-join">เข้าร่วม →</button>
@@ -685,6 +695,64 @@ function stripAvatar(n){
   if(sp>0&&AVATARS.includes(n.slice(0,sp)))return n.slice(sp+1);
   return n;
 }
+function avatarOf(n){
+  if(typeof n!=='string')return '👤';
+  const sp=n.indexOf(' ');
+  if(sp>0&&AVATARS.includes(n.slice(0,sp)))return n.slice(0,sp);
+  return '👤';
+}
+// ── CUSTOM UPLOADED PHOTO (Option 2) ──
+let selectedPhoto=null; // compressed base64 dataURL, or null if using emoji
+const AVATAR_DIM=96,AVATAR_JPEG_Q=.7,AVATAR_MAX_FILE=8*1024*1024;
+function compressImageFile(file){
+  return new Promise((resolve,reject)=>{
+    if(!file||!file.type||!file.type.startsWith('image/')){reject(new Error('ไม่ใช่ไฟล์รูปภาพ'));return;}
+    if(file.size>AVATAR_MAX_FILE){reject(new Error('ไฟล์ใหญ่เกินไป (สูงสุด 8MB)'));return;}
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const w=img.width,h=img.height,side=Math.min(w,h);
+        const sx=(w-side)/2,sy=(h-side)/2;
+        const canvas=document.createElement('canvas');
+        canvas.width=AVATAR_DIM;canvas.height=AVATAR_DIM;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,sx,sy,side,side,0,0,AVATAR_DIM,AVATAR_DIM);
+        resolve(canvas.toDataURL('image/jpeg',AVATAR_JPEG_Q));
+      };
+      img.onerror=()=>reject(new Error('โหลดรูปไม่สำเร็จ'));
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+}
+function setUploadedPhoto(dataURL){
+  selectedPhoto=dataURL;
+  const pv=$('avatar-upload-preview'),img=$('avatar-upload-img'),picker=$('avatar-picker');
+  if(img)img.src=dataURL;
+  if(pv)pv.style.display='block';
+  if(picker)picker.style.opacity='.35';
+}
+function clearUploadedPhoto(){
+  selectedPhoto=null;
+  const pv=$('avatar-upload-preview'),picker=$('avatar-picker'),inp=$('avatar-upload-input');
+  if(pv)pv.style.display='none';
+  if(picker)picker.style.opacity='1';
+  if(inp)inp.value='';
+}
+// Renders either the uploaded photo (img) or the emoji fallback for a given player name/photo
+function avatarHTML(name,photo,size){
+  size=size||24;
+  if(photo)return `<img src="${photo}" class="avatar-chip" style="width:${size}px;height:${size}px">`;
+  return `<span style="font-size:${Math.round(size*.85)}px;display:inline-block;width:${size}px;text-align:center;line-height:1">${avatarOf(name)}</span>`;
+}
+// Renders a team's players (with their photos/emoji) joined for display, given players array from getPlayers(t)
+function teamPlayerChips(t,size){
+  const names=getPlayers(t);
+  if(!names.length)return '';
+  return names.map((n,i)=>`<span style="display:inline-flex;align-items:center;gap:3px">${avatarHTML(n,(t?.photos||{})[`p${i}`],size||18)} ${stripAvatar(n)}</span>`).join(' &nbsp;&amp;&nbsp; ');
+}
 
 let myRole=null,myTi=null,roomCode=null,dbRef=null,lastG=null;
 let gameMode=null; // 'battle' | 'kahoot'
@@ -752,7 +820,18 @@ window.toggleSound=function(){
   const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';
   if(soundOn)_tone(659.25,.1,'sine',.2,0);
 };
-document.addEventListener('DOMContentLoaded',()=>{const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';renderAvatarPicker();});
+document.addEventListener('DOMContentLoaded',()=>{
+  const b=$('sound-toggle-btn');if(b)b.textContent=soundOn?'🔊':'🔇';
+  renderAvatarPicker();
+  const upInput=$('avatar-upload-input');
+  if(upInput)upInput.addEventListener('change',async()=>{
+    const f=upInput.files&&upInput.files[0];if(!f)return;
+    try{const d=await compressImageFile(f);setUploadedPhoto(d);}
+    catch(e){toast('❌ '+e.message);upInput.value='';}
+  });
+  const clearBtn=$('avatar-upload-clear');
+  if(clearBtn)clearBtn.addEventListener('click',clearUploadedPhoto);
+});
 
 // ── FISHER-YATES SHUFFLE ──
 // แทนที่ [...arr].sort(()=>Math.random()-.5) ซึ่งเป็นการสุ่มที่มี bias (ไม่กระจายเท่ากันจริง)
@@ -871,7 +950,7 @@ async function joinGame(){
       const names=Object.values(g.kPlayers||{}).filter(v=>v&&v!==true).map(p=>stripAvatar(p.name||''));
       if(names.includes(name)){toast('❌ ชื่อนี้มีอยู่แล้ว');$('loading-overlay').style.display='none';return;}
       const pid='kp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-      await update(ref(db,`rooms/${code}/kPlayers/${pid}`),{name:displayName,score:0,kicked:false});
+      await update(ref(db,`rooms/${code}/kPlayers/${pid}`),{name:displayName,score:0,kicked:false,photo:selectedPhoto||null});
       roomCode=code;myRole='player';myTi=null;myKPid=pid;myKName=name;
       $('waiting-code').textContent=code;
       ss('waiting-screen');listenRoom(code);
@@ -887,9 +966,13 @@ async function joinGame(){
       const txResult=await runTransaction(teamRef,(team)=>{
         const existing=gp(team||{});
         if(existing.length>=2){full=true;return; } // abort — ไม่มีการเขียนใดๆ
+        const existingPhotos=[];
+        for(let pi=0;pi<existing.length;pi++)existingPhotos.push((team?.photos||{})[`p${pi}`]||null);
         existing.push(displayName);
+        existingPhotos.push(selectedPhoto||null);
         const pObj={_:true};existing.forEach((n,i)=>pObj[`p${i}`]=n);
-        return {...(team||{}),players:pObj,kicked:false};
+        const phObj={_:true};existingPhotos.forEach((ph,i)=>{if(ph)phObj[`p${i}`]=ph;});
+        return {...(team||{}),players:pObj,photos:phObj,kicked:false};
       });
       if(full||!txResult.committed){toast('❌ ทีมเต็มแล้ว');$('loading-overlay').style.display='none';return;}
       roomCode=code;myRole='player';myTi=ti;
@@ -932,7 +1015,7 @@ function renderLobby(g){
     const kp=Object.entries(g.kPlayers||{}).filter(([k,v])=>v&&v!==true&&!v.kicked);
     $('kahoot-lobby-count').textContent=`🏆 Kahoot Mode — ผู้เล่น (${kp.length}/40)`;
     $('kahoot-lobby-list').innerHTML=kp.length
-      ? kp.map(([pid,p])=>`<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(39,174,96,.4);border-radius:20px;padding:5px 12px;font-size:.85rem;font-weight:600">👤 ${p.name} <span style="cursor:pointer;color:#ff8e86;font-weight:900" data-pid="${pid}">✕</span></span>`).join('')
+      ? kp.map(([pid,p])=>`<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(39,174,96,.4);border-radius:20px;padding:5px 12px;font-size:.85rem;font-weight:600">${avatarHTML(p.name,p.photo,20)} ${stripAvatar(p.name)} <span style="cursor:pointer;color:#ff8e86;font-weight:900" data-pid="${pid}">✕</span></span>`).join('')
       : '<span style="color:#a0b4d6;font-size:.85rem">ยังไม่มีผู้เล่น — แชร์ Room Code ได้เลย</span>';
     $('kahoot-lobby-list').querySelectorAll('[data-pid]').forEach(el=>{
       el.addEventListener('click',async()=>{await update(ref(db,`rooms/${roomCode}/kPlayers/${el.dataset.pid}`),{kicked:true});});
@@ -948,7 +1031,7 @@ function renderLobby(g){
       const t=teams[i]||{};const p=getPlayers(t);
       html+=`<div class="lobby-team-row" style="border-left:3px solid ${TC[i]}">
         <span style="color:${TC[i]};font-weight:700;min-width:90px">${TE[i]} ${t.name||'ทีม '+(i+1)}</span>
-        <span style="flex:1;color:${p.length?'#fff':'#666'}">${p.length?p.join(' & '):'รอผู้เล่น...'}</span>
+        <span style="flex:1;color:${p.length?'#fff':'#666'}">${p.length?teamPlayerChips(t,18):'รอผู้เล่น...'}</span>
         <div style="display:flex;gap:6px;align-items:center">
           <span style="font-size:.8rem;color:#a0b4d6">${p.length}/2</span>
           ${p.length?`<button class="kick-btn" onclick="kickP(${i})">⚡ เตะ</button>`:''}
@@ -963,7 +1046,7 @@ function renderLobby(g){
 
 window.kickP=async function(i){
   if(!confirm(`เตะทีม ${i+1} ออก?`))return;
-  await update(ref(db,`rooms/${roomCode}/teams/${i}`),{players:{_:true},kicked:true,name:`ทีม ${i+1}`});
+  await update(ref(db,`rooms/${roomCode}/teams/${i}`),{players:{_:true},photos:{_:true},kicked:true,name:`ทีม ${i+1}`});
   toast('✅ เตะออกแล้ว');
 };
 
@@ -977,7 +1060,7 @@ function renderWaiting(g){
     if(teamCard)teamCard.style.display='none';
     const kp=Object.values(g.kPlayers||{}).filter(v=>v&&v!==true&&!v.kicked);
     $('waiting-kahoot-count').textContent=`ผู้เล่นในห้อง (${kp.length}/40):`;
-    $('waiting-kahoot-list').innerHTML=kp.map(p=>`<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(39,174,96,.4);border-radius:20px;padding:5px 12px;font-size:.85rem">👤 ${p.name}</span>`).join('');
+    $('waiting-kahoot-list').innerHTML=kp.map(p=>`<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(39,174,96,.4);border-radius:20px;padding:5px 12px;font-size:.85rem">${avatarHTML(p.name,p.photo,20)} ${stripAvatar(p.name)}</span>`).join('');
     return;
   }
   if(bs)bs.style.display='block';
@@ -997,7 +1080,7 @@ function renderWaiting(g){
       const p=getPlayers(t);
       html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)">
         <span style="color:${TC[i]};font-weight:700">${TE[i]} ${t.name||'ทีม '+(i+1)}</span>
-        <span style="color:${p.length?'#fff':'#666'}">${p.length?p.join(' & '):'รอผู้เล่น...'}</span>
+        <span style="color:${p.length?'#fff':'#666'}">${p.length?teamPlayerChips(t,16):'รอผู้เล่น...'}</span>
       </div>`;
     }
     wl.innerHTML=html;
@@ -1230,7 +1313,7 @@ function renderBattle(g){
       const dead=(t.hp||0)<=0,chose=choices[`team${i}`]!==undefined,p=getPlayers(t);
       return `<div class="battle-team" id="bteam-${i}" style="border:2px solid ${dead?'rgba(255,255,255,.1)':TC[i]};${dead?'opacity:.35':''}">
         <div style="font-weight:700;font-size:.9rem;color:${TC[i]};margin-bottom:4px">${TE[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${dead?' 💀':''}</div>
-        <div style="font-size:.75rem;color:#a0b4d6">${p.join(' & ')||'-'}</div>
+        <div style="font-size:.75rem;color:#a0b4d6">${teamPlayerChips(t,16)||'-'}</div>
         <div class="hp-bar-wrap"><div class="hp-bar" id="hpbar-${i}" style="width:${Math.max(0,((t.hp||0)/MAX_HP)*100)}%;background:${(t.hp||0)>5?'#27ae60':(t.hp||0)>2?'#f39c12':'#e74c3c'}"></div></div>
         <div class="hp-text">❤️ <span id="hpnum-${i}">${Math.max(0,t.hp||0)}</span>/${MAX_HP} · 🃏${toA(t.cards).length}</div>
         <div style="font-size:.75rem;margin-top:4px;color:${chose?'#7effc0':'#a0b4d6'}">${dead?'':(chose?'✅ เลือกแล้ว':'⏳ รอ...')}</div>
@@ -1381,7 +1464,7 @@ function renderResult(g){
   $('final-scoreboard').innerHTML=
     (mvp?`<div style="text-align:center;padding:10px;background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.4);border-radius:12px;margin-bottom:12px"><div style="font-size:.75rem;color:var(--gold);margin-bottom:4px">⭐ MVP</div><div style="font-weight:700;color:${mvp.color}">${mvp.name} — ${mvp.quizScore||0} ข้อถูก</div></div>`:'')
     +'<div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">📊 ผล</div>'
-    +sorted.map((t,r)=>`<div class="score-row"><div><span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][r]} ${t.name}</span><span style="font-size:.78rem;color:#a0b4d6;margin-left:6px">${getPlayers(t).join(' & ')}</span></div><div><div class="score-hp">${(t.hp||0)<=0?'💀':`❤️${t.hp}`}</div><div style="font-size:.75rem;color:#a0b4d6">✅${t.quizScore||0} 💰${t.gold||0}</div></div></div>`).join('');
+    +sorted.map((t,r)=>`<div class="score-row"><div><span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][r]} ${t.name}</span><span style="font-size:.78rem;color:#a0b4d6;margin-left:6px">${teamPlayerChips(t,16)}</span></div><div><div class="score-hp">${(t.hp||0)<=0?'💀':`❤️${t.hp}`}</div><div style="font-size:.75rem;color:#a0b4d6">✅${t.quizScore||0} 💰${t.gold||0}</div></div></div>`).join('');
   $('play-again-btn').style.display=myRole==='host'?'inline-block':'none';
 }
 
@@ -1389,7 +1472,7 @@ async function playAgain(){
   _prevWinnerVal=undefined;
   const teams={};
   Object.values(lastG?.teams||{}).forEach((t,i)=>{
-    teams[i]={...t,hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:t.players||{_:true},quizScore:0,streak:0};
+    teams[i]={...t,hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:t.players||{_:true},photos:t.photos||{_:true},quizScore:0,streak:0};
   });
   await update(rr(roomCode),{phase:'lobby',currentQ:0,answers:{_:true},battleRound:0,battleChoices:{_:true},battlePhase:'choose',winner:null,winnerIsTie:false,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
 }
@@ -1645,12 +1728,12 @@ function showKahootQuizResult(g,q,qi){
   const kp=Object.values(g.kPlayers||{}).filter(v=>v&&v!==true&&!v.kicked);
   const ranked=[...kp].map(p=>{
     const pid=Object.entries(g.kPlayers||{}).find(([k,v])=>v?.name===p?.name)?.[0];
-    return {name:p.name,score:kScores[pid]||0};
+    return {name:p.name,score:kScores[pid]||0,photo:p.photo||null};
   }).sort((a,b)=>b.score-a.score).slice(0,5);
   const lb=$('kahoot-live-board');
   if(lb)lb.innerHTML=ranked.map((p,i)=>`
     <div class="result-team-row">
-      <span>${['🥇','🥈','🥉','4.','5.'][i]} ${p.name}</span>
+      <span style="display:inline-flex;align-items:center;gap:5px">${['🥇','🥈','🥉','4.','5.'][i]} ${avatarHTML(p.name,p.photo,18)} ${stripAvatar(p.name)}</span>
       <span class="score-hp">${p.score.toLocaleString()}</span>
     </div>`).join('');
   // host nav
@@ -1678,7 +1761,7 @@ async function triggerKahootResult(){
   const kp=Object.values(g.kPlayers||{}).filter(v=>v&&v!==true&&!v.kicked);
   const ranked=[...kp].map(p=>{
     const pid=Object.entries(g.kPlayers||{}).find(([k,v])=>v?.name===p?.name)?.[0];
-    return {name:p.name,score:kScores[pid]||0};
+    return {name:p.name,score:kScores[pid]||0,photo:p.photo||null};
   }).sort((a,b)=>b.score-a.score);
   const winner=ranked[0]?.name||'ไม่มีผู้ชนะ';
   await update(rr(roomCode),{phase:'result',winner,kRanked:ranked.slice(0,40)});
@@ -1691,7 +1774,7 @@ function renderKahootResult(g){
   if(wKey&&wKey!==_prevKWinnerVal)SFX.win();
   _prevKWinnerVal=wKey;
   $('kahoot-winner-text').innerHTML=ranked[0]
-    ?`🥇 ${ranked[0].name} ชนะ!<br><span style="font-size:1rem;color:#a0b4d6">${(ranked[0].score||0).toLocaleString()} คะแนน</span>`
+    ?`🥇 ${avatarHTML(ranked[0].name,ranked[0].photo,32)} ${stripAvatar(ranked[0].name)} ชนะ!<br><span style="font-size:1rem;color:#a0b4d6">${(ranked[0].score||0).toLocaleString()} คะแนน</span>`
     :'ไม่มีผู้ชนะ';
   // podium
   const top3=ranked.slice(0,3);
@@ -1700,7 +1783,7 @@ function renderKahootResult(g){
   $('kahoot-podium').innerHTML=order.map(oi=>{
     const p=top3[oi];if(!p)return '';
     return `<div style="text-align:center;width:90px">
-      <div style="font-weight:700;font-size:.85rem;margin-bottom:6px;word-break:break-word">${['🥇','🥈','🥉'][oi]} ${p.name}</div>
+      <div style="font-weight:700;font-size:.85rem;margin-bottom:6px;word-break:break-word">${['🥇','🥈','🥉'][oi]} ${avatarHTML(p.name,p.photo,24)}<br>${stripAvatar(p.name)}</div>
       <div style="height:${podH[oi]}px;background:${podC[oi]}22;border:2px solid ${podC[oi]};border-radius:10px 10px 0 0;display:flex;flex-direction:column;align-items:center;padding-top:8px">
         <div style="font-weight:900;color:${podC[oi]}">${(p.score||0).toLocaleString()}</div>
       </div>
@@ -1709,7 +1792,7 @@ function renderKahootResult(g){
   // full list
   $('kahoot-final-list').innerHTML=ranked.map((p,i)=>`
     <div class="result-team-row" style="${i<3?'border-color:rgba(201,162,39,.5)':''}">
-      <span>${i+1}. ${p.name}</span>
+      <span style="display:inline-flex;align-items:center;gap:5px">${i+1}. ${avatarHTML(p.name,p.photo,18)} ${stripAvatar(p.name)}</span>
       <span class="score-hp">${(p.score||0).toLocaleString()}</span>
     </div>`).join('');
   $('kahoot-play-again-btn').style.display=myRole==='host'?'inline-block':'none';
