@@ -1192,10 +1192,10 @@ async function triggerQR(){
   for(let i=0;i<4;i++){
     const k=`team${i}`,a=ans[k];
     if(a===q.ans){
-      const card=dc();const cards=toA(teams[i].cards);if(cards.length<MC)cards.push(card);
+      const card=dc();const cards=toA(teams[i].cards);cards.push(card);
       const co={_:true};cards.forEach((c,j)=>co[`c${j}`]=c);teams[i].cards=co;
       teams[i].gold=(teams[i].gold||0)+3;teams[i].quizScore=(teams[i].quizScore||0)+1;teams[i].streak=(teams[i].streak||0)+1;
-      let wc=null;if(teams[i].streak%3===0&&cards.length<MC){wc=dw();cards.push(wc);const co2={_:true};cards.forEach((c,j)=>co2[`c${j}`]=c);teams[i].cards=co2;}
+      let wc=null;if(teams[i].streak%3===0){wc=dw();cards.push(wc);const co2={_:true};cards.forEach((c,j)=>co2[`c${j}`]=c);teams[i].cards=co2;}
       rewards[k]={correct:true,card,gold:3,streak:teams[i].streak,wildCard:wc};
     }else if(a!==undefined){teams[i].gold=(teams[i].gold||0)+1;teams[i].streak=0;rewards[k]={correct:false,gold:1};}
     else{teams[i].streak=0;rewards[k]={correct:false,gold:0};}
@@ -1249,7 +1249,7 @@ function renderShop(g){
   $('shop-phase-title').textContent=`${TE[si]} ${t.name||'ทีม '+(si+1)} — ช้อปการ์ด`;
   $('shop-drawn-cards').innerHTML=cards.length?cards.map(c=>`<span>${c.icon||''}${c.name||''}</span>`).join(' '):'ยังไม่มี';
   $('shop-gold-amt').textContent=t.gold||0;
-  $('shop-card-limit').textContent=`🃏 ${cards.length}/${MC}`;
+  $('shop-card-limit').textContent=`🃏 ${cards.length} ใบ (ไม่จำกัด)`;
   const all=[...SKILL_CARDS,...WILD_CARDS];
   $('shop-grid').innerHTML=all.map(sk=>`
     <div class="skill-card ${!isMe?'disabled-card':''}" onclick="${isMe?`buyCd('${sk.id}')`:''}" title="${sk.desc}">
@@ -1268,7 +1268,6 @@ window.buyCd=async function(skillId){
   if(!lastG||!roomCode)return;
   const si=lastG.shopTeamIdx||0,t=lastG.teams?.[si]||{};
   const cards=toA(t.cards);
-  if(cards.length>=MC){toast('❌ การ์ดเต็ม!');return;}
   const sk=[...SKILL_CARDS,...WILD_CARDS].find(s=>s.id===skillId);
   if(!sk)return;
   if(sk.cost>0&&(t.gold||0)<sk.cost){toast('❌ ทองไม่พอ!');return;}
