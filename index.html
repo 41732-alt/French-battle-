@@ -305,7 +305,7 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 <!-- BATTLE -->
 <div id="battle-screen" class="screen">
   <div style="text-align:center"><div class="phase-tag">Phase 3 — Battle</div><div style="font-size:1rem;font-weight:700;color:var(--gold-light)" id="battle-turn-label"></div><div id="battle-chosen-count" style="font-size:.85rem;color:#a0b4d6;margin-top:4px"></div></div>
-  <div style="text-align:center;width:100%;max-width:640px"><div class="timer-big" id="timer-count">30</div><div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div></div>
+  <div style="text-align:center;width:100%;max-width:640px"><div class="timer-big" id="battle-timer-count">30</div><div class="timer-bar-wrap"><div class="timer-bar" id="battle-timer-bar" style="width:100%"></div></div></div>
   <div class="card" style="width:100%;max-width:680px">
     <div id="battle-teams-display"></div>
     <div class="battle-log" id="battle-log"></div>
@@ -853,7 +853,9 @@ function startTimer(st,tot,onEnd){
   let _lastTickVal=null;
   function tick(){
     const rem=Math.max(0,tot-(nowServer()-st)/1000),val=Math.ceil(rem);
-    const tc=$('timer-count'),tb=$('timer-bar');
+    const activeScreen=document.querySelector('.screen.active');
+    const tc=activeScreen?activeScreen.querySelector('.timer-big'):$('timer-count');
+    const tb=activeScreen?activeScreen.querySelector('.timer-bar'):$('timer-bar');
     if(tc){tc.textContent=val;tc.style.color=val<=5?'#e74c3c':val<=10?'#f39c12':'#7effc0';}
     if(tb){tb.style.width=`${(rem/tot)*100}%`;tb.style.background=val<=5?'linear-gradient(90deg,#e74c3c,#ff6b6b)':val<=10?'linear-gradient(90deg,#f39c12,#f1c40f)':'linear-gradient(90deg,#c9a227,#f0d060)';}
     if(val<=5&&val>0&&val!==_lastTickVal){_lastTickVal=val;SFX.tick();}
