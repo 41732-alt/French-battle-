@@ -964,19 +964,24 @@ async function joinGame(){
       // และ retry ให้อัตโนมัติถ้าข้อมูลเปลี่ยนไปจากตอนเริ่มอ่าน
       const ti=parseInt($('join-team').value);
       const teamRef=ref(db,`rooms/${code}/teams/${ti}`);
-      let full=false;
+      let full=false,myIndex=-1;
       const txResult=await runTransaction(teamRef,(team)=>{
         const existing=gp(team||{});
         if(existing.length>=2){full=true;return; } // abort — ไม่มีการเขียนใดๆ
-        const existingPhotos=[];
-        for(let pi=0;pi<existing.length;pi++)existingPhotos.push((team?.photos||{})[`p${pi}`]||null);
+        myIndex=existing.length;
         existing.push(displayName);
-        existingPhotos.push(selectedPhoto||null);
         const pObj={_:true};existing.forEach((n,i)=>pObj[`p${i}`]=n);
-        const phObj={_:true};existingPhotos.forEach((ph,i)=>{if(ph)phObj[`p${i}`]=ph;});
-        return {...(team||{}),players:pObj,photos:phObj,kicked:false};
+        return {...(team||{}),players:pObj,kicked:false};
       });
       if(full||!txResult.committed){toast('❌ ทีมเต็มแล้ว');$('loading-overlay').style.display='none';return;}
+      // เขียนรูปโปรไฟล์แยกเป็นอีกคำสั่ง update() ต่างหาก (ไม่ฝังไว้ใน transaction ด้านบน)
+      // เพราะ runTransaction อาจถูกเรียกซ้ำ (retry) หลายรอบเมื่อมีการชนกันของข้อมูล และ
+      // ค่า Base64 รูปภาพที่มีขนาดใหญ่กว่าชื่อทั่วไปมาก มีโอกาสทำให้การ commit ไม่เสถียร
+      // การแยกเขียนแบบ update() ตรงๆ (เหมือนที่ใช้ใน Kahoot Mode) ทำให้เชื่อถือได้กว่า
+      if(selectedPhoto&&myIndex>=0){
+        try{await update(ref(db,`rooms/${code}/teams/${ti}/photos`),{[`p${myIndex}`]:selectedPhoto});}
+        catch(e){console.warn('photo upload failed',e);}
+      }
       roomCode=code;myRole='player';myTi=ti;
       $('waiting-code').textContent=code;
       ss('waiting-screen');listenRoom(code);
