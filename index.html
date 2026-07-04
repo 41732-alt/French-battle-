@@ -1251,13 +1251,16 @@ function renderShop(g){
   $('shop-gold-amt').textContent=t.gold||0;
   $('shop-card-limit').textContent=`🃏 ${cards.length} ใบ (ไม่จำกัด)`;
   const all=[...SKILL_CARDS,...WILD_CARDS];
-  $('shop-grid').innerHTML=all.map(sk=>`
-    <div class="skill-card ${!isMe?'disabled-card':''}" onclick="${isMe?`buyCd('${sk.id}')`:''}" title="${sk.desc}">
+  $('shop-grid').innerHTML=all.map(sk=>{
+    const isWild=sk.cost<=0,clickable=isMe&&!isWild;
+    return `
+    <div class="skill-card ${!clickable?'disabled-card':''}" onclick="${clickable?`buyCd('${sk.id}')`:''}" title="${isWild?'ได้รับฟรีอัตโนมัติเมื่อตอบถูกติดกัน 3 ข้อ (Streak x3) — ซื้อในร้านไม่ได้':sk.desc}">
       <div class="card-svg">${sk.svg}</div>
       <div class="skill-name">${sk.name}</div>
       <div class="skill-desc">${sk.desc}</div>
-      <div class="skill-cost">${sk.cost>0?`💰 ${sk.cost}`:'🌟 Wild'}</div>
-    </div>`).join('');
+      <div class="skill-cost">${isWild?'🎁 ได้จาก Streak':`💰 ${sk.cost}`}</div>
+    </div>`;
+  }).join('');
   $('shop-next-btn').style.display=isMe?'inline-block':'none';
   $('shop-next-btn').textContent=si<3?'ทีมถัดไป →':'⚔️ เริ่มสู้การ์ด!';
   $('shop-waiting').style.display=isMe?'none':'block';
@@ -1270,6 +1273,7 @@ window.buyCd=async function(skillId){
   const cards=toA(t.cards);
   const sk=[...SKILL_CARDS,...WILD_CARDS].find(s=>s.id===skillId);
   if(!sk)return;
+  if(sk.cost<=0){toast('❌ การ์ด Wild ได้ฟรีจาก Streak เท่านั้น ซื้อในร้านไม่ได้');return;}
   if(sk.cost>0&&(t.gold||0)<sk.cost){toast('❌ ทองไม่พอ!');return;}
   cards.push({...sk});
   const co={_:true};cards.forEach((c,j)=>co[`c${j}`]=c);
