@@ -1244,7 +1244,8 @@ async function nextQ(){
 // ── SHOP ──
 function renderShop(g){
   const si=g.shopTeamIdx||0,t=(g.teams||{})[si]||{};
-  const isMe=myRole==='host'||myTi===si;
+  const canBuy=myTi===si;                          // ซื้อการ์ดได้เฉพาะทีมที่กำลังช้อปตานี้เท่านั้น
+  const canAdvance=myRole==='host'||myTi===si;      // กดปุ่ม "ทีมถัดไป" ได้ทั้ง host และเจ้าของทีม
   const cards=toA(t.cards);
   $('shop-phase-title').textContent=`${TE[si]} ${t.name||'ทีม '+(si+1)} — ช้อปการ์ด`;
   $('shop-drawn-cards').innerHTML=cards.length?cards.map(c=>`<span>${c.icon||''}${c.name||''}</span>`).join(' '):'ยังไม่มี';
@@ -1252,7 +1253,7 @@ function renderShop(g){
   $('shop-card-limit').textContent=`🃏 ${cards.length} ใบ (ไม่จำกัด)`;
   const all=[...SKILL_CARDS,...WILD_CARDS];
   $('shop-grid').innerHTML=all.map(sk=>{
-    const isWild=sk.cost<=0,clickable=isMe&&!isWild;
+    const isWild=sk.cost<=0,clickable=canBuy&&!isWild;
     return `
     <div class="skill-card ${!clickable?'disabled-card':''}" onclick="${clickable?`buyCd('${sk.id}')`:''}" title="${isWild?'ได้รับฟรีอัตโนมัติเมื่อตอบถูกติดกัน 3 ข้อ (Streak x3) — ซื้อในร้านไม่ได้':sk.desc}">
       <div class="card-svg">${sk.svg}</div>
@@ -1261,15 +1262,16 @@ function renderShop(g){
       <div class="skill-cost">${isWild?'🎁 ได้จาก Streak':`💰 ${sk.cost}`}</div>
     </div>`;
   }).join('');
-  $('shop-next-btn').style.display=isMe?'inline-block':'none';
+  $('shop-next-btn').style.display=canAdvance?'inline-block':'none';
   $('shop-next-btn').textContent=si<3?'ทีมถัดไป →':'⚔️ เริ่มสู้การ์ด!';
-  $('shop-waiting').style.display=isMe?'none':'block';
+  $('shop-waiting').style.display=canBuy?'none':'block';
   $('shop-waiting').textContent=`⏳ รอ ${t.name||'ทีม '+(si+1)} ช้อปการ์ด...`;
 }
 
 window.buyCd=async function(skillId){
   if(!lastG||!roomCode)return;
   const si=lastG.shopTeamIdx||0,t=lastG.teams?.[si]||{};
+  if(myTi!==si){toast('❌ ยังไม่ถึงตาทีมคุณช้อป');return;}
   const cards=toA(t.cards);
   const sk=[...SKILL_CARDS,...WILD_CARDS].find(s=>s.id===skillId);
   if(!sk)return;
