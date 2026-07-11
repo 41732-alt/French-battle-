@@ -101,6 +101,35 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 .hand-card.heal{border-color:#27ae60;background:rgba(39,174,96,.15);color:#7effc0;}
 .hand-card.steal{border-color:#9b59b6;background:rgba(155,89,182,.15);color:#c39bd3;}
 .hand-card[class*="wild_"]{border-color:#f39c12;background:rgba(243,156,18,.15);color:#f0d060;}
+/* ── Team photo ── */
+.team-photo{box-shadow:0 0 0 2px rgba(255,255,255,.15);}
+.team-photo-fallback{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+.team-photo-upload-btn{display:inline-block;padding:6px 14px;font-size:.78rem;cursor:pointer;}
+/* ── Battle card-use effects ── */
+.bteam-fx-layer{position:relative;}
+.fx-pop{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);font-size:2.1rem;pointer-events:none;z-index:20;filter:drop-shadow(0 0 6px rgba(0,0,0,.5));}
+@keyframes fxAttack{0%{transform:translate(-50%,-50%) scale(.3) rotate(-15deg);opacity:0}25%{transform:translate(-50%,-50%) scale(1.3) rotate(8deg);opacity:1}70%{transform:translate(-50%,-55%) scale(1.05) rotate(0);opacity:1}100%{transform:translate(-50%,-80%) scale(.8) rotate(0);opacity:0}}
+@keyframes fxHeal{0%{transform:translate(-50%,-20%) scale(.4);opacity:0}30%{transform:translate(-50%,-60%) scale(1.2);opacity:1}100%{transform:translate(-50%,-110%) scale(1);opacity:0}}
+@keyframes fxDefend{0%{transform:translate(-50%,-50%) scale(.3);opacity:0}35%{transform:translate(-50%,-50%) scale(1.25);opacity:1}75%{transform:translate(-50%,-50%) scale(1.05);opacity:1}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}
+@keyframes fxSteal{0%{transform:translate(-50%,-50%) scale(.3) rotate(0);opacity:0}40%{transform:translate(-50%,-65%) scale(1.2) rotate(180deg);opacity:1}100%{transform:translate(-50%,-95%) scale(.7) rotate(360deg);opacity:0}}
+.fx-attack{animation:fxAttack .85s ease-out forwards;}
+.fx-heal{animation:fxHeal .95s ease-out forwards;}
+.fx-defend{animation:fxDefend .9s ease-out forwards;}
+.fx-steal{animation:fxSteal .95s ease-out forwards;}
+/* ── Rank reveal (result screen) ── */
+#rank-reveal-overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(13,27,75,.88);backdrop-filter:blur(6px);}
+.reveal-rank-tag{font-family:'Playfair Display',serif;font-size:1.1rem;letter-spacing:3px;color:var(--gold-light);text-transform:uppercase;opacity:0;}
+.reveal-card{display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transform:scale(.2) translateY(40px);}
+.reveal-card.pop-in{animation:revealPop .6s cubic-bezier(.34,1.56,.64,1) forwards;}
+@keyframes revealPop{0%{opacity:0;transform:scale(.2) translateY(40px)}60%{opacity:1;transform:scale(1.15) translateY(-6px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.reveal-tag-in{animation:tagFade .4s ease-out forwards;}
+@keyframes tagFade{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.reveal-photo{border-radius:50%;object-fit:cover;box-shadow:0 0 0 4px var(--gold),0 0 34px rgba(240,208,96,.6);}
+.reveal-photo-fallback{border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px var(--gold),0 0 34px rgba(240,208,96,.6);}
+.reveal-name{font-weight:700;font-size:1.2rem;}
+.reveal-hp{font-size:.9rem;color:#a0b4d6;}
+.score-row-in{animation:scoreRowIn .4s ease-out forwards;}
+@keyframes scoreRowIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
 .battle-log{margin-top:10px;background:rgba(0,0,0,.3);border-radius:10px;padding:10px 14px;font-size:.85rem;color:#c0d4f0;min-height:36px;}
 .target-select{display:none;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
 .target-btn{padding:8px 16px;border-radius:8px;border:2px solid var(--gold);background:rgba(201,162,39,.1);color:var(--gold-light);font-weight:700;cursor:pointer;font-family:'Sarabun',sans-serif;}
@@ -224,6 +253,15 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     <div id="waiting-my-team" style="font-weight:700;margin-bottom:10px"></div>
     <div style="font-size:.85rem;color:#a0b4d6;margin-bottom:8px">ตั้งชื่อทีมของคุณ:</div>
     <div class="team-name-row"><input type="text" id="my-team-name-input" placeholder="ชื่อทีม..." maxlength="12"><button class="btn btn-gold" style="padding:10px 16px;white-space:nowrap" id="btn-save-name">บันทึก</button></div>
+    <div style="margin-top:14px;text-align:center;border-top:1px solid rgba(255,255,255,.1);padding-top:12px">
+      <div style="font-size:.8rem;color:#a0b4d6;margin-bottom:8px">📷 รูปทีม (โชว์ตอนต่อสู้ / ประกาศผล):</div>
+      <img id="team-photo-preview-img" class="avatar-chip team-photo" style="width:64px;height:64px;display:none;margin-bottom:8px">
+      <div>
+        <label for="team-photo-input" class="btn btn-outline team-photo-upload-btn">📷 อัปโหลดรูปทีม</label>
+        <input type="file" accept="image/*" id="team-photo-input" style="display:none">
+        <button type="button" class="btn btn-outline team-photo-upload-btn" id="btn-clear-team-photo" style="display:none">✕ ลบรูปทีม</button>
+      </div>
+    </div>
   </div>
   <div class="card" style="width:100%;max-width:400px">
     <div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">ทีมในห้อง:</div>
@@ -328,7 +366,11 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
 </div>
 <!-- RESULT -->
 <div id="result-screen" class="screen">
-  <div class="trophy">🏆</div>
+  <div id="rank-reveal-overlay">
+    <div class="reveal-rank-tag" id="reveal-rank-tag"></div>
+    <div class="reveal-card" id="reveal-card"></div>
+  </div>
+  <div class="trophy" id="trophy">🏆</div>
   <div class="winner-text" id="winner-text"></div>
   <div class="card" id="final-scoreboard" style="width:100%;max-width:500px"></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
@@ -704,7 +746,8 @@ function avatarOf(n){
 // ── CUSTOM UPLOADED PHOTO (Option 2) ──
 let selectedPhoto=null; // compressed base64 dataURL, or null if using emoji
 const AVATAR_DIM=96,AVATAR_JPEG_Q=.7,AVATAR_MAX_FILE=8*1024*1024;
-function compressImageFile(file){
+function compressImageFile(file,dim,q){
+  dim=dim||AVATAR_DIM;q=q||AVATAR_JPEG_Q;
   return new Promise((resolve,reject)=>{
     if(!file||!file.type||!file.type.startsWith('image/')){reject(new Error('ไม่ใช่ไฟล์รูปภาพ'));return;}
     if(file.size>AVATAR_MAX_FILE){reject(new Error('ไฟล์ใหญ่เกินไป (สูงสุด 8MB)'));return;}
@@ -715,10 +758,10 @@ function compressImageFile(file){
         const w=img.width,h=img.height,side=Math.min(w,h);
         const sx=(w-side)/2,sy=(h-side)/2;
         const canvas=document.createElement('canvas');
-        canvas.width=AVATAR_DIM;canvas.height=AVATAR_DIM;
+        canvas.width=dim;canvas.height=dim;
         const ctx=canvas.getContext('2d');
-        ctx.drawImage(img,sx,sy,side,side,0,0,AVATAR_DIM,AVATAR_DIM);
-        resolve(canvas.toDataURL('image/jpeg',AVATAR_JPEG_Q));
+        ctx.drawImage(img,sx,sy,side,side,0,0,dim,dim);
+        resolve(canvas.toDataURL('image/jpeg',q));
       };
       img.onerror=()=>reject(new Error('โหลดรูปไม่สำเร็จ'));
       img.src=e.target.result;
@@ -752,6 +795,13 @@ function teamPlayerChips(t,size){
   const names=getPlayers(t);
   if(!names.length)return '';
   return names.map((n,i)=>`<span style="display:inline-flex;align-items:center;gap:3px">${avatarHTML(n,(t?.photos||{})[`p${i}`],size||18)} ${stripAvatar(n)}</span>`).join(' &nbsp;&amp;&nbsp; ');
+}
+// Renders a team's identity photo: uploaded team photo > first member's photo > team-color emoji badge
+function teamPhotoHTML(t,i,size){
+  size=size||40;
+  const photo=t?.teamPhoto||(t?.photos||{}).p0;
+  if(photo)return `<img src="${photo}" class="avatar-chip team-photo" style="width:${size}px;height:${size}px">`;
+  return `<span class="team-photo-fallback" style="width:${size}px;height:${size}px;font-size:${Math.round(size*.5)}px;background:${TC[i]}22;border:2px solid ${TC[i]}">${TE[i]}</span>`;
 }
 
 let myRole=null,myTi=null,roomCode=null,dbRef=null,lastG=null;
@@ -831,7 +881,32 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   const clearBtn=$('avatar-upload-clear');
   if(clearBtn)clearBtn.addEventListener('click',clearUploadedPhoto);
+  // Team photo upload (waiting screen)
+  const tpInput=$('team-photo-input');
+  if(tpInput)tpInput.addEventListener('change',async()=>{
+    const f=tpInput.files&&tpInput.files[0];if(!f)return;
+    if(!roomCode||myTi===null){toast('❌ ยังไม่ได้เข้าร่วมทีม');tpInput.value='';return;}
+    try{
+      const d=await compressImageFile(f,160,.72);
+      await update(ref(db,`rooms/${roomCode}/teams/${myTi}`),{teamPhoto:d});
+      showTeamPhotoPreview(d);
+      toast('✅ อัปโหลดรูปทีมแล้ว!');
+    }catch(e){toast('❌ '+e.message);}
+    tpInput.value='';
+  });
+  const tpClear=$('btn-clear-team-photo');
+  if(tpClear)tpClear.addEventListener('click',async()=>{
+    if(!roomCode||myTi===null)return;
+    await update(ref(db,`rooms/${roomCode}/teams/${myTi}`),{teamPhoto:null});
+    showTeamPhotoPreview(null);
+    toast('✅ ลบรูปทีมแล้ว');
+  });
 });
+function showTeamPhotoPreview(photo){
+  const img=$('team-photo-preview-img'),clearBtn=$('btn-clear-team-photo');
+  if(photo){if(img){img.src=photo;img.style.display='inline-block';}if(clearBtn)clearBtn.style.display='inline-block';}
+  else{if(img)img.style.display='none';if(clearBtn)clearBtn.style.display='none';}
+}
 
 // ── FISHER-YATES SHUFFLE ──
 // แทนที่ [...arr].sort(()=>Math.random()-.5) ซึ่งเป็นการสุ่มที่มี bias (ไม่กระจายเท่ากันจริง)
@@ -1037,7 +1112,7 @@ function renderLobby(g){
     for(let i=0;i<4;i++){
       const t=teams[i]||{};const p=getPlayers(t);
       html+=`<div class="lobby-team-row" style="border-left:3px solid ${TC[i]}">
-        <span style="color:${TC[i]};font-weight:700;min-width:90px">${TE[i]} ${t.name||'ทีม '+(i+1)}</span>
+        <span style="color:${TC[i]};font-weight:700;min-width:90px;display:flex;align-items:center;gap:6px">${teamPhotoHTML(t,i,24)} ${TE[i]} ${t.name||'ทีม '+(i+1)}</span>
         <span style="flex:1;color:${p.length?'#fff':'#666'}">${p.length?teamPlayerChips(t,18):'รอผู้เล่น...'}</span>
         <div style="display:flex;gap:6px;align-items:center">
           <span style="font-size:.8rem;color:#a0b4d6">${p.length}/2</span>
@@ -1079,14 +1154,15 @@ function renderWaiting(g){
   const wt=$('waiting-my-team');
   if(wt){wt.style.color=TC[myTi];wt.textContent=`${TE[myTi]} ทีมของฉัน: ${myT.name||'ทีม '+(myTi+1)}`;}
   const wi=$('my-team-name-input');if(wi)wi.placeholder=myT.name||'ตั้งชื่อทีม...';
+  showTeamPhotoPreview(myT.teamPhoto||null);
   const wl=$('waiting-teams');
   if(wl){
     let html='';
     for(let i=0;i<4;i++){
       const t=teams[i]||{};
       const p=getPlayers(t);
-      html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)">
-        <span style="color:${TC[i]};font-weight:700">${TE[i]} ${t.name||'ทีม '+(i+1)}</span>
+      html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07);gap:8px">
+        <span style="display:flex;align-items:center;gap:6px;color:${TC[i]};font-weight:700">${teamPhotoHTML(t,i,26)} ${TE[i]} ${t.name||'ทีม '+(i+1)}</span>
         <span style="color:${p.length?'#fff':'#666'}">${p.length?teamPlayerChips(t,16):'รอผู้เล่น...'}</span>
       </div>`;
     }
@@ -1323,8 +1399,10 @@ function renderBattle(g){
   $('battle-teams-display').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">`+
     activeTeams.map(({idx:i,t})=>{
       const dead=(t.hp||0)<=0,chose=choices[`team${i}`]!==undefined,p=getPlayers(t);
-      return `<div class="battle-team" id="bteam-${i}" style="border:2px solid ${dead?'rgba(255,255,255,.1)':TC[i]};${dead?'opacity:.35':''}">
-        <div style="font-weight:700;font-size:.9rem;color:${TC[i]};margin-bottom:4px">${TE[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${dead?' 💀':''}</div>
+      return `<div class="battle-team bteam-fx-layer" id="bteam-${i}" style="border:2px solid ${dead?'rgba(255,255,255,.1)':TC[i]};${dead?'opacity:.35':''}">
+        <div id="bteam-fx-${i}"></div>
+        ${teamPhotoHTML(t,i,44)}
+        <div style="font-weight:700;font-size:.9rem;color:${TC[i]};margin-bottom:4px;margin-top:6px">${TE[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${dead?' 💀':''}</div>
         <div style="font-size:.75rem;color:#a0b4d6">${teamPlayerChips(t,16)||'-'}</div>
         <div class="hp-bar-wrap"><div class="hp-bar" id="hpbar-${i}" style="width:${Math.max(0,((t.hp||0)/MAX_HP)*100)}%;background:${(t.hp||0)>5?'#27ae60':(t.hp||0)>2?'#f39c12':'#e74c3c'}"></div></div>
         <div class="hp-text">❤️ <span id="hpnum-${i}">${Math.max(0,t.hp||0)}</span>/${MAX_HP} · 🃏${toA(t.cards).length}</div>
@@ -1378,7 +1456,7 @@ async function subChoice(choice){
 async function resolveBattle(){
   if(!lastG||!roomCode)return;
   const g=lastG,teams=Object.values(g.teams||{}).map(t=>({...t,cards:[...toA(t.cards)]}));
-  const choices=g.battleChoices||{},logs=[],dmgTaken={};
+  const choices=g.battleChoices||{},logs=[],dmgTaken={},effects=[];
   const actions=[];
   for(let i=0;i<4;i++){
     const c=choices[`team${i}`];if(!c||c.cardId===null||(teams[i]?.hp||0)<=0||teams[i]?.eliminated)continue;
@@ -1390,22 +1468,22 @@ async function resolveBattle(){
   ['defend','heal','wild_mirror','wild_revive','attack','attack2','steal','wild_bomb','wild_double','wild_freeze'].forEach(ph=>{
     actions.filter(a=>a.card.type===ph).forEach(a=>{
       const att=teams[a.ai],tgt=teams[a.ti>=0?a.ti:a.ai];
-      if(ph==='defend'){att.shield=true;logs.push(`🛡️ ${att.name} ตั้งรับ!`);}
-      else if(ph==='heal'){att.hp=Math.min(MAX_HP,(att.hp||0)+1);logs.push(`💚 ${att.name} ฟื้น 1HP!`);}
-      else if(ph==='wild_revive'){att.hp=Math.min(MAX_HP,(att.hp||0)+3);logs.push(`💫 ${att.name} ฟื้นคืนชีพ +3HP!`);}
-      else if(ph==='wild_mirror'){att.mirror=true;logs.push(`🪞 ${att.name} ติดสะท้อน!`);}
+      if(ph==='defend'){att.shield=true;logs.push(`🛡️ ${att.name} ตั้งรับ!`);effects.push({type:'defend',to:a.ai});}
+      else if(ph==='heal'){att.hp=Math.min(MAX_HP,(att.hp||0)+1);logs.push(`💚 ${att.name} ฟื้น 1HP!`);effects.push({type:'heal',to:a.ai});}
+      else if(ph==='wild_revive'){att.hp=Math.min(MAX_HP,(att.hp||0)+3);logs.push(`💫 ${att.name} ฟื้นคืนชีพ +3HP!`);effects.push({type:'heal',to:a.ai});}
+      else if(ph==='wild_mirror'){att.mirror=true;logs.push(`🪞 ${att.name} ติดสะท้อน!`);effects.push({type:'defend',to:a.ai});}
       else if(ph==='attack'||ph==='attack2'){
         const dmg=a.card.dmg||2;
-        if(tgt.shield){tgt.shield=false;logs.push(`⚔️ ${att.name} โจมตี ${tgt.name} โดนป้องกัน! 🛡️`);}
-        else if(tgt.mirror){tgt.mirror=false;if(!dmgTaken[a.ai])dmgTaken[a.ai]=0;dmgTaken[a.ai]+=dmg;logs.push(`🪞 สะท้อน! ${att.name} โดนโจมตีกลับ!`);}
-        else{if(!dmgTaken[a.ti])dmgTaken[a.ti]=0;dmgTaken[a.ti]+=dmg;logs.push(`⚔️ ${att.name} โจมตี ${tgt.name} -${dmg}HP!`);}
+        if(tgt.shield){tgt.shield=false;logs.push(`⚔️ ${att.name} โจมตี ${tgt.name} โดนป้องกัน! 🛡️`);effects.push({type:'defend',to:a.ti});}
+        else if(tgt.mirror){tgt.mirror=false;if(!dmgTaken[a.ai])dmgTaken[a.ai]=0;dmgTaken[a.ai]+=dmg;logs.push(`🪞 สะท้อน! ${att.name} โดนโจมตีกลับ!`);effects.push({type:'attack',to:a.ai});}
+        else{if(!dmgTaken[a.ti])dmgTaken[a.ti]=0;dmgTaken[a.ti]+=dmg;logs.push(`⚔️ ${att.name} โจมตี ${tgt.name} -${dmg}HP!`);effects.push({type:'attack',to:a.ti});}
       }
       else if(ph==='steal'){
-        if(tgt.shield){tgt.shield=false;logs.push(`💜 ${att.name} ขโมย HP โดนป้องกัน! 🛡️`);}
-        else{if(!dmgTaken[a.ti])dmgTaken[a.ti]=0;dmgTaken[a.ti]+=1;att.hp=Math.min(MAX_HP,(att.hp||0)+1);logs.push(`💜 ${att.name} ขโมย 1HP จาก ${tgt.name}!`);}
+        if(tgt.shield){tgt.shield=false;logs.push(`💜 ${att.name} ขโมย HP โดนป้องกัน! 🛡️`);effects.push({type:'defend',to:a.ti});}
+        else{if(!dmgTaken[a.ti])dmgTaken[a.ti]=0;dmgTaken[a.ti]+=1;att.hp=Math.min(MAX_HP,(att.hp||0)+1);logs.push(`💜 ${att.name} ขโมย 1HP จาก ${tgt.name}!`);effects.push({type:'steal',to:a.ti});effects.push({type:'heal',to:a.ai});}
       }
-      else if(ph==='wild_bomb'){teams.forEach((tt,ti)=>{if(ti!==a.ai&&(tt.hp||0)>0){if(tt.shield){tt.shield=false;logs.push(`🛡️ ${tt.name} ป้องกันระเบิด!`);}else{if(!dmgTaken[ti])dmgTaken[ti]=0;dmgTaken[ti]+=2;logs.push(`💣 ${att.name} ระเบิด ${tt.name}!`);}}});}
-      else if(ph==='wild_freeze'){tgt.frozen=true;logs.push(`❄️ ${att.name} แช่แข็ง ${tgt.name}!`);}
+      else if(ph==='wild_bomb'){teams.forEach((tt,ti)=>{if(ti!==a.ai&&(tt.hp||0)>0){if(tt.shield){tt.shield=false;logs.push(`🛡️ ${tt.name} ป้องกันระเบิด!`);effects.push({type:'defend',to:ti});}else{if(!dmgTaken[ti])dmgTaken[ti]=0;dmgTaken[ti]+=2;logs.push(`💣 ${att.name} ระเบิด ${tt.name}!`);effects.push({type:'attack',to:ti});}}});}
+      else if(ph==='wild_freeze'){tgt.frozen=true;logs.push(`❄️ ${att.name} แช่แข็ง ${tgt.name}!`);effects.push({type:'steal',to:a.ti});}
     });
   });
   Object.keys(dmgTaken).forEach(i=>{teams[i].hp=Math.max(0,(teams[i].hp||0)-dmgTaken[i]);if(teams[i].hp<=0){teams[i].eliminated=true;logs.push(`💀 ${teams[i].name} แพ้!`);}});
@@ -1421,6 +1499,7 @@ async function resolveBattle(){
   u[`rooms/${roomCode}/battlePhase`]='resolving';
   u[`rooms/${roomCode}/battleResolveLog`]=logs;
   u[`rooms/${roomCode}/battleDmgTaken`]=dmgTaken;
+  u[`rooms/${roomCode}/battleEffects`]=effects;
   if(activeAlive.length<=1||allOutOfCards){
     const w=computeBattleWinner(teamsObj);
     u[`rooms/${roomCode}/phase`]='result';
@@ -1431,12 +1510,32 @@ async function resolveBattle(){
 }
 
 let _soundedBattleRound=null;
+const FX_ICON={attack:'⚔️',heal:'💚',defend:'🛡️',steal:'💜'};
+function spawnFx(idx,type){
+  const layer=document.getElementById(`bteam-fx-${idx}`);
+  if(!layer)return;
+  const el=document.createElement('span');
+  el.className=`fx-pop fx-${type}`;
+  el.textContent=FX_ICON[type]||'✨';
+  layer.appendChild(el);
+  setTimeout(()=>el.remove(),1000);
+}
 function renderBR(g){
-  const logs=g.battleResolveLog||[],dmg=g.battleDmgTaken||{};
+  const logs=g.battleResolveLog||[],dmg=g.battleDmgTaken||{},effects=g.battleEffects||[];
   $('battle-resolve-log').innerHTML=logs.map(l=>`<div style="margin-bottom:4px;padding:4px 8px;background:rgba(255,255,255,.05);border-radius:6px">${l}</div>`).join('');
   const rKey=g.battleRound||0;
   const isNewRound=_soundedBattleRound!==rKey;
   if(isNewRound)_soundedBattleRound=rKey;
+  if(isNewRound){
+    effects.forEach((fx,i)=>{
+      setTimeout(()=>{
+        spawnFx(fx.to,fx.type);
+        if(fx.type==='defend')SFX.cardUse();
+        else if(fx.type==='heal')_tone(880,.14,'sine',.2,0);
+        else if(fx.type==='steal'){_tone(660,.1,'triangle',.16,0);_tone(440,.12,'triangle',.14,.08);}
+      },150+i*180);
+    });
+  }
   Object.keys(dmg).forEach(i=>{
     setTimeout(()=>{
       const el=document.getElementById(`bteam-${i}`);
@@ -1467,24 +1566,66 @@ async function triggerResult(g){
 // ── RESULT ──
 let _prevWinnerVal=undefined;
 function renderResult(g){
-  if(g.winner&&g.winner!==_prevWinnerVal)SFX.win();
-  _prevWinnerVal=g.winner;
-  $('winner-text').textContent=g.winnerIsTie?`🤝 เสมอ! ${g.winner}`:`🎉 ${g.winner} ชนะ!`;
   const teams=Object.values(g.teams||{});
   const sorted=[...teams].sort((a,b)=>(b.hp||0)-(a.hp||0));
   const mvp=[...teams].sort((a,b)=>(b.quizScore||0)-(a.quizScore||0))[0];
-  $('final-scoreboard').innerHTML=
+  const scoreboardHTML=
     (mvp?`<div style="text-align:center;padding:10px;background:rgba(201,162,39,.12);border:1px solid rgba(201,162,39,.4);border-radius:12px;margin-bottom:12px"><div style="font-size:.75rem;color:var(--gold);margin-bottom:4px">⭐ MVP</div><div style="font-weight:700;color:${mvp.color}">${mvp.name} — ${mvp.quizScore||0} ข้อถูก</div></div>`:'')
     +'<div style="font-weight:700;color:var(--gold-light);margin-bottom:10px">📊 ผล</div>'
-    +sorted.map((t,r)=>`<div class="score-row"><div><span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][r]} ${t.name}</span><span style="font-size:.78rem;color:#a0b4d6;margin-left:6px">${teamPlayerChips(t,16)}</span></div><div><div class="score-hp">${(t.hp||0)<=0?'💀':`❤️${t.hp}`}</div><div style="font-size:.75rem;color:#a0b4d6">✅${t.quizScore||0} 💰${t.gold||0}</div></div></div>`).join('');
+    +sorted.map((t,r)=>`<div class="score-row" style="opacity:0" data-row="${r}"><div style="display:flex;align-items:center;gap:8px"><span style="color:${t.color};font-weight:700">${['🥇','🥈','🥉','4️⃣'][r]}</span>${teamPhotoHTML(t,teams.indexOf(t),26)}<span><span style="color:${t.color};font-weight:700">${t.name}</span><br><span style="font-size:.78rem;color:#a0b4d6">${teamPlayerChips(t,14)}</span></span></div><div><div class="score-hp">${(t.hp||0)<=0?'💀':`❤️${t.hp}`}</div><div style="font-size:.75rem;color:#a0b4d6">✅${t.quizScore||0} 💰${t.gold||0}</div></div></div>`).join('');
+  $('final-scoreboard').innerHTML=scoreboardHTML;
   $('play-again-btn').style.display=myRole==='host'?'inline-block':'none';
+
+  const isNewWinner=g.winner&&g.winner!==_prevWinnerVal;
+  _prevWinnerVal=g.winner;
+  $('winner-text').textContent=g.winnerIsTie?`🤝 เสมอ! ${g.winner}`:`🎉 ${g.winner} ชนะ!`;
+  if(isNewWinner){
+    playRankReveal(sorted,teams,g);
+  } else {
+    document.querySelectorAll('#final-scoreboard .score-row').forEach(el=>el.style.opacity='1');
+  }
+}
+
+const RANK_TAGS=['🥇 อันดับ 1 — แชมป์!','🥈 อันดับ 2','🥉 อันดับ 3','4️⃣ อันดับ 4'];
+function playRankReveal(sorted,teams,g){
+  const overlay=$('rank-reveal-overlay'),tagEl=$('reveal-rank-tag'),cardEl=$('reveal-card');
+  $('trophy').style.visibility='hidden';$('winner-text').style.visibility='hidden';
+  document.querySelectorAll('#final-scoreboard .score-row').forEach(el=>el.style.opacity='0');
+  overlay.style.display='flex';
+  const order=[...sorted].reverse(); // last place → champion
+  let step=0;
+  function showStep(){
+    if(step>=order.length){
+      overlay.style.display='none';
+      $('trophy').style.visibility='visible';$('winner-text').style.visibility='visible';
+      SFX.win();
+      document.querySelectorAll('#final-scoreboard .score-row').forEach(el=>{
+        const r=parseInt(el.dataset.row);
+        setTimeout(()=>{el.classList.add('score-row-in');el.style.opacity='1';},r*140);
+      });
+      return;
+    }
+    const t=order[step],rankIdx=sorted.length-1-step,origIdx=teams.indexOf(t);
+    tagEl.textContent=RANK_TAGS[rankIdx]||`อันดับ ${rankIdx+1}`;
+    tagEl.classList.remove('reveal-tag-in');void tagEl.offsetWidth;tagEl.classList.add('reveal-tag-in');
+    const photo=t.teamPhoto||(t.photos||{}).p0;
+    cardEl.innerHTML=`${photo?`<img src="${photo}" class="reveal-photo" style="width:120px;height:120px">`:`<div class="reveal-photo-fallback" style="width:120px;height:120px;font-size:3rem;background:${(TC[origIdx]||'#888')}33">${TE[origIdx]||'🏳️'}</div>`}
+      <div class="reveal-name" style="color:${t.color||TC[origIdx]}">${t.name||'ทีม '+(origIdx+1)}</div>
+      <div class="reveal-hp">${(t.hp||0)<=0?'💀 หมดพลัง':`❤️ ${t.hp}/${MAX_HP} HP`}</div>`;
+    cardEl.classList.remove('pop-in');void cardEl.offsetWidth;cardEl.classList.add('pop-in');
+    SFX.cardUse();
+    if(rankIdx===0)setTimeout(()=>SFX.win(),300);
+    step++;
+    setTimeout(showStep,rankIdx===0?1300:900);
+  }
+  showStep();
 }
 
 async function playAgain(){
   _prevWinnerVal=undefined;
   const teams={};
   Object.values(lastG?.teams||{}).forEach((t,i)=>{
-    teams[i]={...t,hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:t.players||{_:true},photos:t.photos||{_:true},quizScore:0,streak:0};
+    teams[i]={...t,hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:t.players||{_:true},photos:t.photos||{_:true},teamPhoto:t.teamPhoto||null,quizScore:0,streak:0};
   });
   await update(rr(roomCode),{phase:'lobby',currentQ:0,answers:{_:true},battleRound:0,battleChoices:{_:true},battlePhase:'choose',winner:null,winnerIsTie:false,quizShowResult:false,selectedCat:null,selectedLevel:null,teams,log:'เริ่มใหม่!'});
 }
