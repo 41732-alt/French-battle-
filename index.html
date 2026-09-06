@@ -406,7 +406,10 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
     <div style="font-size:.9rem;color:#e0d0a0;margin-bottom:8px;font-weight:700" id="outro-video-caption"></div>
     <video id="outro-video" playsinline controls autoplay muted loop style="width:100%;border-radius:16px;border:2px solid var(--gold);background:#000"></video>
   </div>
-  <button id="btn-outro-home" class="btn btn-outline">🏠 หน้าหลัก</button>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button id="btn-outro-back" class="btn btn-outline">⬅ กลับไปดูตารางคะแนน</button>
+    <button id="btn-outro-home" class="btn btn-outline">🏠 หน้าหลัก</button>
+  </div>
 </div>
 <!-- CUSTOM Q -->
 <div id="custom-q-screen" class="screen">
@@ -2159,6 +2162,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('play-again-btn')?.addEventListener('click',playAgain);
   $('btn-export-pdf')?.addEventListener('click',()=>exportPDF(lastG));
   $('btn-result-home')?.addEventListener('click',()=>ss('home'));
+  $('btn-outro-back')?.addEventListener('click',()=>{
+    const v=$('outro-video');if(v)v.pause();
+    const mode=lastG?.mode||gameMode||'battle';
+    if(mode==='kahoot')ss('kahoot-result-screen');else ss('result-screen');
+  });
   $('btn-outro-home')?.addEventListener('click',()=>{
     const v=$('outro-video');if(v){v.pause();}
     ss('home');
