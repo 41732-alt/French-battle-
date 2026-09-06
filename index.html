@@ -981,13 +981,23 @@ function syncUI(g){
 
 // ── HOST ──
 async function hostGame(){
-  const code=gc();roomCode=code;myRole='host';myTi=null;
-  const mk=i=>({name:`ทีม ${i+1}`,color:TC[i],hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:{_:true},quizScore:0,streak:0});
-  await set(rr(code),{phase:'lobby',currentQ:0,selectedCat:null,selectedLevel:null,selectedQCount:20,answers:{_:true},battleChoices:{_:true},battleRound:0,battlePhase:'choose',teams:{0:mk(0),1:mk(1),2:mk(2),3:mk(3)},kPlayers:{_:true},kScores:{_:true},log:'รอผู้เล่น...',winner:null,winnerIsTie:false,timerPerQuestion:15,createdAt:serverTimestamp()});
-  $('room-code-display').textContent=code;
-  genQR(code);
-  ss('mode-select');
-  listenRoom(code);
+  const btn=$('btn-host-game');
+  if(btn){btn.disabled=true;btn.textContent='⏳ กำลังสร้างห้อง...';}
+  try{
+    const code=gc();
+    const mk=i=>({name:`ทีม ${i+1}`,color:TC[i],hp:MAX_HP,gold:0,cards:{_:true},shield:false,eliminated:false,kicked:false,players:{_:true},quizScore:0,streak:0});
+    await set(rr(code),{phase:'lobby',currentQ:0,selectedCat:null,selectedLevel:null,selectedQCount:20,answers:{_:true},battleChoices:{_:true},battleRound:0,battlePhase:'choose',teams:{0:mk(0),1:mk(1),2:mk(2),3:mk(3)},kPlayers:{_:true},kScores:{_:true},log:'รอผู้เล่น...',winner:null,winnerIsTie:false,timerPerQuestion:15,createdAt:serverTimestamp()});
+    roomCode=code;myRole='host';myTi=null;
+    $('room-code-display').textContent=code;
+    genQR(code);
+    ss('mode-select');
+    listenRoom(code);
+  }catch(e){
+    console.error('hostGame failed:',e);
+    toast('❌ สร้างห้องไม่สำเร็จ: '+(e.message||e));
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='✨ สร้างห้องใหม่';}
+  }
 }
 
 function genQR(code){
