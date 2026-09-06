@@ -1402,7 +1402,7 @@ function renderBattle(g){
       return `<div class="battle-team bteam-fx-layer" id="bteam-${i}" style="border:2px solid ${dead?'rgba(255,255,255,.1)':TC[i]};${dead?'opacity:.35':''}">
         <div id="bteam-fx-${i}"></div>
         ${teamPhotoHTML(t,i,44)}
-        <div style="font-weight:700;font-size:.9rem;color:${TC[i]};margin-bottom:4px;margin-top:6px">${TE[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${dead?' 💀':''}</div>
+        <div style="font-weight:700;font-size:.9rem;color:${TC[i]};margin-bottom:4px;margin-top:6px">${TE[i]} ${t.name||'ทีม '+(i+1)}${t.shield?' 🛡️':''}${t.frozen?' ❄️':''}${dead?' 💀':''}</div>
         <div style="font-size:.75rem;color:#a0b4d6">${teamPlayerChips(t,16)||'-'}</div>
         <div class="hp-bar-wrap"><div class="hp-bar" id="hpbar-${i}" style="width:${Math.max(0,((t.hp||0)/MAX_HP)*100)}%;background:${(t.hp||0)>5?'#27ae60':(t.hp||0)>2?'#f39c12':'#e74c3c'}"></div></div>
         <div class="hp-text">❤️ <span id="hpnum-${i}">${Math.max(0,t.hp||0)}</span>/${MAX_HP} · 🃏${toA(t.cards).length}</div>
@@ -1418,6 +1418,13 @@ function renderBattle(g){
   if(myRole==='host'){$('host-resolve-btn').style.display='inline-block';$('pass-btn').style.display='none';hd.innerHTML='<div style="color:#a0b4d6;font-size:.85rem">👀 รอทุกทีมเลือก...</div>';return;}
   $('host-resolve-btn').style.display='none';
   if(!isAlive){hd.innerHTML='<div style="color:#a0b4d6">💀 ทีมคุณแพ้แล้ว</div>';$('pass-btn').style.display='none';return;}
+  // ❄️ ทีมที่โดนแช่แข็งจากรอบก่อน — ข้ามเทิร์นนี้อัตโนมัติ (ไม่ต้องรอผู้เล่นกด)
+  if(myT?.frozen&&!iChose){
+    hd.innerHTML='<div style="color:#82cfff;font-weight:700">❄️ ทีมของคุณถูกแช่แข็ง — ข้ามเทิร์นนี้...</div>';
+    $('pass-btn').style.display='none';
+    subChoice({cardId:null,cardIdx:-1,targetIdx:-1});
+    return;
+  }
   if(iChose){hd.innerHTML='<div style="color:#7effc0;font-weight:700">✅ เลือกแล้ว รอทีมอื่น...</div>';$('pass-btn').style.display='none';return;}
   $('pass-btn').style.display='inline-block';
   const cards=toA(myT?.cards);
@@ -1458,8 +1465,14 @@ async function resolveBattle(){
   const g=lastG,teams=Object.values(g.teams||{}).map(t=>({...t,cards:[...toA(t.cards)]}));
   const choices=g.battleChoices||{},logs=[],dmgTaken={},effects=[];
   const actions=[];
+  // ❄️ ทีมที่เข้ารอบนี้พร้อม frozen=true แปลว่าถูกแช่แข็งมาจากรอบก่อน แล้วข้ามเทิร์นนี้ไปแล้ว (ฝั่ง client auto-pass ให้)
+  // ปลดล็อกทีมนั้นตรงนี้ (หลังจากที่ได้ "ข้าม" ไปแล้วครบ 1 รอบ) และกันไม่ให้การ์ดของทีมนั้นถูกใช้ในรอบนี้อีก
+  const wasFrozen=teams.map(t=>!!t.frozen);
+  teams.forEach((t,i)=>{
+    if(t.frozen){logs.push(`❄️ ${t.name} ยังคงแช่แข็งอยู่ ข้ามเทิร์นนี้!`);t.frozen=false;}
+  });
   for(let i=0;i<4;i++){
-    const c=choices[`team${i}`];if(!c||c.cardId===null||(teams[i]?.hp||0)<=0||teams[i]?.eliminated)continue;
+    const c=choices[`team${i}`];if(!c||c.cardId===null||(teams[i]?.hp||0)<=0||teams[i]?.eliminated||wasFrozen[i])continue;
     const card=teams[i].cards[c.cardIdx];if(!card||card.id!==c.cardId)continue;
     actions.push({ai:i,card,ci:c.cardIdx,ti:c.targetIdx});
   }
@@ -1483,7 +1496,19 @@ async function resolveBattle(){
         else{if(!dmgTaken[a.ti])dmgTaken[a.ti]=0;dmgTaken[a.ti]+=1;att.hp=Math.min(MAX_HP,(att.hp||0)+1);logs.push(`💜 ${att.name} ขโมย 1HP จาก ${tgt.name}!`);effects.push({type:'steal',to:a.ti});effects.push({type:'heal',to:a.ai});}
       }
       else if(ph==='wild_bomb'){teams.forEach((tt,ti)=>{if(ti!==a.ai&&(tt.hp||0)>0){if(tt.shield){tt.shield=false;logs.push(`🛡️ ${tt.name} ป้องกันระเบิด!`);effects.push({type:'defend',to:ti});}else{if(!dmgTaken[ti])dmgTaken[ti]=0;dmgTaken[ti]+=2;logs.push(`💣 ${att.name} ระเบิด ${tt.name}!`);effects.push({type:'attack',to:ti});}}});}
-      else if(ph==='wild_freeze'){tgt.frozen=true;logs.push(`❄️ ${att.name} แช่แข็ง ${tgt.name}!`);effects.push({type:'steal',to:a.ti});}
+      else if(ph==='wild_double'){
+        // โจมตีศัตรู 2 ทีมพร้อมกัน -2HP: เอาเป้าหมายที่เลือกไว้ + สุ่มอีก 1 ทีมที่ยังไม่ตายและไม่ใช่ผู้เล่นเอง
+        const dmg=2,primary=a.ti;
+        const others=teams.map((tt,ti)=>ti).filter(ti=>ti!==a.ai&&ti!==primary&&(teams[ti].hp||0)>0&&getPlayers(teams[ti]).length>0);
+        const secondary=others.length?others[rnd(others.length)]:-1;
+        [primary,secondary].filter(ti=>ti>=0&&ti!==a.ai).forEach(ti=>{
+          const tt=teams[ti];
+          if(tt.shield){tt.shield=false;logs.push(`🛡️ ${tt.name} ป้องกันโจมตีคู่!`);effects.push({type:'defend',to:ti});}
+          else if(tt.mirror){tt.mirror=false;if(!dmgTaken[a.ai])dmgTaken[a.ai]=0;dmgTaken[a.ai]+=dmg;logs.push(`🪞 สะท้อน! ${att.name} โดนโจมตีคู่กลับ!`);effects.push({type:'attack',to:a.ai});}
+          else{if(!dmgTaken[ti])dmgTaken[ti]=0;dmgTaken[ti]+=dmg;logs.push(`✨ ${att.name} โจมตีคู่ใส่ ${tt.name} -${dmg}HP!`);effects.push({type:'attack',to:ti});}
+        });
+      }
+      else if(ph==='wild_freeze'){tgt.frozen=true;logs.push(`❄️ ${att.name} แช่แข็ง ${tgt.name} — ข้ามเทิร์นถัดไป!`);effects.push({type:'steal',to:a.ti});}
     });
   });
   Object.keys(dmgTaken).forEach(i=>{teams[i].hp=Math.max(0,(teams[i].hp||0)-dmgTaken[i]);if(teams[i].hp<=0){teams[i].eliminated=true;logs.push(`💀 ${teams[i].name} แพ้!`);}});
