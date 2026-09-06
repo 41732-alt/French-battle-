@@ -377,6 +377,7 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
   <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
     <button id="play-again-btn" class="btn btn-gold" style="display:none">🔄 เล่นใหม่</button>
     <button id="btn-export-pdf" class="btn btn-outline">📄 Export PDF</button>
+    <button id="btn-goto-outro-1" class="btn btn-outline">🎭 หน้าก่อนแยกย้าย</button>
     <button id="btn-result-home" class="btn btn-outline">🏠 หน้าหลัก</button>
   </div>
 </div>
@@ -393,6 +394,7 @@ select{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.2);border-ra
   <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
     <button id="kahoot-play-again-btn" class="btn btn-gold" style="display:none">🔄 เล่นใหม่</button>
     <button id="kahoot-export-btn" class="btn btn-outline">📄 Export PDF</button>
+    <button id="btn-goto-outro-2" class="btn btn-outline">🎭 หน้าก่อนแยกย้าย</button>
     <button id="kahoot-home-btn" class="btn btn-outline">🏠 หน้าหลัก</button>
   </div>
 </div>
@@ -2162,6 +2164,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('play-again-btn')?.addEventListener('click',playAgain);
   $('btn-export-pdf')?.addEventListener('click',()=>exportPDF(lastG));
   $('btn-result-home')?.addEventListener('click',()=>ss('home'));
+  $('btn-goto-outro-1')?.addEventListener('click',()=>{ss('outro-screen');renderOutro();});
+  $('btn-goto-outro-2')?.addEventListener('click',()=>{ss('outro-screen');renderOutro();});
   $('btn-outro-back')?.addEventListener('click',()=>{
     const v=$('outro-video');if(v)v.pause();
     const mode=lastG?.mode||gameMode||'battle';
